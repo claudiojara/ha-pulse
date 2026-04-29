@@ -6,6 +6,7 @@ import {
   getDomain,
   isOn,
 } from '@dashboard-web/shared';
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
 
@@ -87,12 +88,18 @@ export const useEntitiesStore = create<EntitiesState>((set) => ({
 /**
  * Selector que devuelve la entidad con override optimista aplicado.
  * Usar este selector en componentes para "ver" cambios optimistas instantáneos.
+ *
+ * Implementación crítica: dos selectores separados devuelven referencias estables
+ * del store (real y override). useMemo compone el objeto derivado solo cuando una
+ * de esas referencias cambia. Si combinamos en un solo selector con spread, cada
+ * render genera un objeto nuevo aunque el contenido no haya cambiado, lo que
+ * dispara `setState` en `setRef` de Radix dentro de Switch y loopea.
  */
 export function useEntity(entityId: EntityId | undefined): HassEntity | undefined {
-  return useEntitiesStore((s) => {
-    if (!entityId) return undefined;
-    const real = s.entities[entityId];
-    const override = s.optimistic[entityId];
+  const real = useEntitiesStore((s) => (entityId ? s.entities[entityId] : undefined));
+  const override = useEntitiesStore((s) => (entityId ? s.optimistic[entityId] : undefined));
+
+  return useMemo(() => {
     if (!real) return undefined;
     if (!override) return real;
     return {
@@ -100,7 +107,7 @@ export function useEntity(entityId: EntityId | undefined): HassEntity | undefine
       state: override.state,
       attributes: { ...real.attributes, ...(override.attributes ?? {}) },
     };
-  });
+  }, [real, override]);
 }
 
 /** Lista de entity_ids que pertenecen al área dada (vía entity_registry/device_registry). */
