@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { Server as SocketIOServer } from 'socket.io';
 import type {
+  Area,
   ClientToServerEvents,
   ServerToClientEvents,
   StateChangedEvent,
@@ -49,6 +50,11 @@ async function main(): Promise<void> {
     uptime: process.uptime(),
   }));
 
+  fastify.get('/api/areas', async (): Promise<{ areas: Area[] }> => {
+    const areas = await ha.getAllAreas();
+    return { areas };
+  });
+
   // Levantamos primero Fastify para tener el server HTTP listo, después montamos Socket.IO encima.
   await fastify.listen({ port: config.server.port, host: config.server.host });
   fastify.log.info(
@@ -72,19 +78,24 @@ async function main(): Promise<void> {
     broadcastStateChanged(event.entity_id, event);
   });
 
+  const disposeAreasListener = ha.onAreasUpdated((areas) => {
+    io.emit('areas_updated', areas);
+  });
+
   io.on('connection', async (socket) => {
     fastify.log.info({ socketId: socket.id }, '[ws] cliente conectado');
 
     try {
-      const states = await ha.getAllStates();
+      const [states, areas] = await Promise.all([ha.getAllStates(), ha.getAllAreas()]);
       socket.emit('initial_states', states);
+      socket.emit('initial_areas', areas);
       socket.emit('connection_status', {
         connected: true,
         haReachable: ha.isConnected(),
         lastSync: new Date().toISOString(),
       });
     } catch (err) {
-      fastify.log.error({ err }, '[ws] no se pudo enviar initial_states');
+      fastify.log.error({ err }, '[ws] no se pudo enviar snapshot inicial');
     }
 
     socket.on('call_service', async (payload, ack) => {
@@ -107,6 +118,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     fastify.log.info(`Recibido ${signal}, cerrando...`);
     disposeHaListener();
+    disposeAreasListener();
     ha.close();
     io.close();
     await fastify.close();

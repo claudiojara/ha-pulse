@@ -26,6 +26,9 @@ playwright/.cache/
 *.swp
 *.swo
 
+# claude code (setup local del harness, no del proyecto)
+.claude/
+
 # os
 .DS_Store
 Thumbs.db

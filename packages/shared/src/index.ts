@@ -69,7 +69,9 @@ export interface ConnectionStatus {
 
 export interface ServerToClientEvents {
   initial_states: (states: HassEntity[]) => void;
+  initial_areas: (areas: Area[]) => void;
   state_changed: (event: StateChangedEvent) => void;
+  areas_updated: (areas: Area[]) => void;
   connection_status: (status: ConnectionStatus) => void;
 }
 

@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
+import { Sidebar } from '@/components/Sidebar';
 import { useHaSocket } from '@/hooks/useHaSocket';
 import { useEntitiesStore } from '@/stores/entities';
 
@@ -17,8 +18,8 @@ function RootLayout() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
+        <div className="flex items-center justify-between px-6 py-4">
           <h1 className="text-lg font-semibold tracking-tight">HA Dashboard</h1>
           <div className="flex items-center gap-2 text-sm">
             <span
@@ -41,9 +42,12 @@ function RootLayout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <Outlet />
-      </main>
+      <div className="flex">
+        <Sidebar />
+        <main className="flex-1 px-6 py-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
