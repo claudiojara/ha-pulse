@@ -117,6 +117,26 @@ export function useEntityIdsInArea(areaId: string | undefined): EntityId[] {
   );
 }
 
+/** Entidades del área dada, sorteadas por nombre. */
+export function useEntitiesInArea(areaId: string | undefined): HassEntity[] {
+  return useEntitiesStore(
+    useShallow((s) => {
+      if (!areaId) return [];
+      const list: HassEntity[] = [];
+      for (const e of Object.values(s.entities)) {
+        if (s.entityArea[e.entity_id] !== areaId) continue;
+        list.push(e);
+      }
+      list.sort((a, b) => {
+        const an = a.attributes.friendly_name ?? a.entity_id;
+        const bn = b.attributes.friendly_name ?? b.entity_id;
+        return an.localeCompare(bn);
+      });
+      return list;
+    }),
+  );
+}
+
 /**
  * Selector de luces sorteadas por nombre. Si se pasa areaId, filtra a las que pertenecen al área.
  * Sin areaId, devuelve todas las luces.
