@@ -106,6 +106,8 @@ Abrí `http://localhost:5173`. Si ves tus luces y los toggles responden, todo OK
 - [ ] Tests unit de cada card con Vitest + Testing Library.
 - [ ] Storybook (opcional pero recomendado) o página `/catalog` con todas las cards.
 
+> **Nota:** Fase 0-3 NO se conecta a HA via [ha-mcp](https://github.com/homeassistant-ai/ha-mcp). El dashboard usa `home-assistant-js-websocket` directo porque necesita stream reactivo de `state_changed` (request-response de MCP no encaja). ha-mcp se evalúa solo en Fase 4.
+
 ---
 
 ## Fase 3 — Persistencia de UI
@@ -133,6 +135,23 @@ Abrí `http://localhost:5173`. Si ves tus luces y los toggles responden, todo OK
 ## Fase 4 — Chat con Claude
 
 **Objetivo:** chat conversacional que controle HA con tool_use. Más eficiente que el de HAWeb.
+
+### Decisión a tomar antes de codear: tools propias vs ha-mcp
+
+[ha-mcp](https://github.com/homeassistant-ai/ha-mcp) es un MCP server (Python, FastMCP) que expone 86+ tools sobre HA: search, control, automations, dashboards, traces, history. Mantenido por el ecosistema HA, releases mensuales. Tradeoffs:
+
+| | Opción A — Tools custom | Opción B — ha-mcp externo | Opción C — Híbrido |
+|---|---|---|---|
+| **Stack** | Solo Node | Node + Python | Node + Python |
+| **Tools** | 5-6 que escribís vos | 86 listas | 86 + las DB-aware tuyas |
+| **Latencia** | mínima (un hop) | +1 hop | mixta |
+| **Capacidades extra** | — | automations, traces, dashboards, skills built-in | igual que B |
+| **Tools DB-aware** (preferences Fase 3) | first-class | no encaja | first-class |
+| **Mantenimiento** | todo tuyo | upstream maneja HA, vos solo wiring | upstream + tuyo |
+
+Si elegís B o C: ¿add-on de HA OS o proceso local Python? ¿Anthropic SDK consume MCP nativo o vos hacés el bridge?
+
+Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Migrar a C si necesitás features de ha-mcp (automations, traces). Reevaluar al final de Fase 4.
 
 ### Tareas
 
