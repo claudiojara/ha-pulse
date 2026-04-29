@@ -1,6 +1,8 @@
 import { getDomain } from '@dashboard-web/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { LightCard } from '@/features/lights/LightCard';
+import { BinarySensorCard } from '@/features/sensors/BinarySensorCard';
+import { SensorCard } from '@/features/sensors/SensorCard';
 import { SwitchCard } from '@/features/switches/SwitchCard';
 import { useEntity } from '@/stores/entities';
 
@@ -23,6 +25,10 @@ export function EntityCard({ entityId }: EntityCardProps) {
       return <LightCard entityId={entityId} />;
     case 'switch':
       return <SwitchCard entityId={entityId} />;
+    case 'sensor':
+      return <SensorCard entityId={entityId} />;
+    case 'binary_sensor':
+      return <BinarySensorCard entityId={entityId} />;
     default:
       return <UnsupportedCard entityId={entityId} domain={domain} state={entity.state} name={entity.attributes.friendly_name ?? entityId} />;
   }
