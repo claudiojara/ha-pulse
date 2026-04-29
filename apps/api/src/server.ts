@@ -82,13 +82,22 @@ async function main(): Promise<void> {
     io.emit('areas_updated', areas);
   });
 
+  const disposeEntityAreasListener = ha.onEntityAreasUpdated((map) => {
+    io.emit('entity_areas_updated', map);
+  });
+
   io.on('connection', async (socket) => {
     fastify.log.info({ socketId: socket.id }, '[ws] cliente conectado');
 
     try {
-      const [states, areas] = await Promise.all([ha.getAllStates(), ha.getAllAreas()]);
+      const [states, areas, entityAreas] = await Promise.all([
+        ha.getAllStates(),
+        ha.getAllAreas(),
+        ha.getEntityAreaMap(),
+      ]);
       socket.emit('initial_states', states);
       socket.emit('initial_areas', areas);
+      socket.emit('initial_entity_areas', entityAreas);
       socket.emit('connection_status', {
         connected: true,
         haReachable: ha.isConnected(),
@@ -119,6 +128,7 @@ async function main(): Promise<void> {
     fastify.log.info(`Recibido ${signal}, cerrando...`);
     disposeHaListener();
     disposeAreasListener();
+    disposeEntityAreasListener();
     ha.close();
     io.close();
     await fastify.close();

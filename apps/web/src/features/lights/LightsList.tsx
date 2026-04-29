@@ -1,30 +1,28 @@
-import { type HassEntity, getDomain, isOn } from '@dashboard-web/shared';
-import { useMemo } from 'react';
+import { type HassEntity, isOn } from '@dashboard-web/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { callService } from '@/lib/socket';
-import { useEntitiesStore } from '@/stores/entities';
+import { useEntitiesStore, useLights } from '@/stores/entities';
 
-export function LightsList() {
-  const entities = useEntitiesStore((s) => s.entities);
+interface LightsListProps {
+  /** Si se pasa, filtra solo las luces de esa área. Sin valor, muestra todas. */
+  areaId?: string;
+  /** Mensaje cuando no hay luces (override del default). */
+  emptyLabel?: string;
+}
+
+export function LightsList({ areaId, emptyLabel }: LightsListProps = {}) {
+  const lights = useLights(areaId);
   const optimistic = useEntitiesStore((s) => s.optimistic);
   const setOptimistic = useEntitiesStore((s) => s.setOptimistic);
   const clearOptimistic = useEntitiesStore((s) => s.clearOptimistic);
-
-  const lights = useMemo(() => {
-    const list = Object.values(entities).filter((e) => getDomain(e.entity_id) === 'light');
-    return list.sort((a, b) => {
-      const an = a.attributes.friendly_name ?? a.entity_id;
-      const bn = b.attributes.friendly_name ?? b.entity_id;
-      return an.localeCompare(bn);
-    });
-  }, [entities]);
 
   if (lights.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          Sin luces detectadas todavía. Verificá que el backend esté conectado a HA.
+          {emptyLabel ??
+            'Sin luces detectadas todavía. Verificá que el backend esté conectado a HA.'}
         </CardContent>
       </Card>
     );

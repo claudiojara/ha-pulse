@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { LightsList } from '@/features/lights/LightsList';
 import { useArea } from '@/stores/areas';
 
 export const Route = createFileRoute('/room/$areaId')({
@@ -27,9 +28,10 @@ function RoomPage() {
       <section>
         <h2 className="text-2xl font-semibold tracking-tight">{area.name}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Filtro de entidades por área llega en Fase 1.b. Por ahora, sidebar y routing.
+          Luces de esta habitación. Otras entidades (climate, media, sensores) llegan en Fase 2.
         </p>
       </section>
+      <LightsList areaId={area.area_id} emptyLabel="No hay luces asignadas a esta área." />
     </div>
   );
 }

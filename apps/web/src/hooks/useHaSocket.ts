@@ -11,6 +11,7 @@ import { useEntitiesStore } from '@/stores/entities';
 export function useHaSocket(): void {
   const setInitial = useEntitiesStore((s) => s.setInitialStates);
   const apply = useEntitiesStore((s) => s.applyStateChanged);
+  const setEntityAreaMap = useEntitiesStore((s) => s.setEntityAreaMap);
   const setConnection = useEntitiesStore((s) => s.setConnection);
   const setInitialAreas = useAreasStore((s) => s.setInitialAreas);
   const setAreas = useAreasStore((s) => s.setAreas);
@@ -30,6 +31,16 @@ export function useHaSocket(): void {
     const onAreasUpdated: Parameters<typeof socket.on<'areas_updated'>>[1] = (areas) => {
       setAreas(areas);
     };
+    const onInitialEntityAreas: Parameters<typeof socket.on<'initial_entity_areas'>>[1] = (
+      map,
+    ) => {
+      setEntityAreaMap(map);
+    };
+    const onEntityAreasUpdated: Parameters<typeof socket.on<'entity_areas_updated'>>[1] = (
+      map,
+    ) => {
+      setEntityAreaMap(map);
+    };
     const onStatus: Parameters<typeof socket.on<'connection_status'>>[1] = (status) => {
       setConnection(status);
     };
@@ -48,6 +59,8 @@ export function useHaSocket(): void {
     socket.on('state_changed', onStateChanged);
     socket.on('initial_areas', onInitialAreas);
     socket.on('areas_updated', onAreasUpdated);
+    socket.on('initial_entity_areas', onInitialEntityAreas);
+    socket.on('entity_areas_updated', onEntityAreasUpdated);
     socket.on('connection_status', onStatus);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -57,9 +70,11 @@ export function useHaSocket(): void {
       socket.off('state_changed', onStateChanged);
       socket.off('initial_areas', onInitialAreas);
       socket.off('areas_updated', onAreasUpdated);
+      socket.off('initial_entity_areas', onInitialEntityAreas);
+      socket.off('entity_areas_updated', onEntityAreasUpdated);
       socket.off('connection_status', onStatus);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
     };
-  }, [setInitial, apply, setConnection, setInitialAreas, setAreas]);
+  }, [setInitial, apply, setEntityAreaMap, setConnection, setInitialAreas, setAreas]);
 }

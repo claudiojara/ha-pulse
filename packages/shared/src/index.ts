@@ -67,11 +67,16 @@ export interface ConnectionStatus {
   lastSync: string | null;
 }
 
+/** Mapa entity_id → area_id (o null si la entity no tiene área asignada). */
+export type EntityAreaMap = Record<EntityId, string | null>;
+
 export interface ServerToClientEvents {
   initial_states: (states: HassEntity[]) => void;
   initial_areas: (areas: Area[]) => void;
+  initial_entity_areas: (map: EntityAreaMap) => void;
   state_changed: (event: StateChangedEvent) => void;
   areas_updated: (areas: Area[]) => void;
+  entity_areas_updated: (map: EntityAreaMap) => void;
   connection_status: (status: ConnectionStatus) => void;
 }
 
