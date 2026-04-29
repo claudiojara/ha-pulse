@@ -1,5 +1,6 @@
 import { getDomain } from '@dashboard-web/shared';
 import { Card, CardContent } from '@/components/ui/card';
+import { ClimateCard } from '@/features/climate/ClimateCard';
 import { LightCard } from '@/features/lights/LightCard';
 import { BinarySensorCard } from '@/features/sensors/BinarySensorCard';
 import { SensorCard } from '@/features/sensors/SensorCard';
@@ -29,6 +30,8 @@ export function EntityCard({ entityId }: EntityCardProps) {
       return <SensorCard entityId={entityId} />;
     case 'binary_sensor':
       return <BinarySensorCard entityId={entityId} />;
+    case 'climate':
+      return <ClimateCard entityId={entityId} />;
     default:
       return <UnsupportedCard entityId={entityId} domain={domain} state={entity.state} name={entity.attributes.friendly_name ?? entityId} />;
   }
