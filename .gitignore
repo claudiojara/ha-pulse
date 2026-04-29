@@ -1,0 +1,44 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# test
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# os
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# generated routes (TanStack Router)
+apps/web/src/routeTree.gen.ts
+
+# data local
+*.db
+*.db-shm
+*.db-wal
