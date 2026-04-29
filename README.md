@@ -97,11 +97,14 @@ Detalle completo en [ANALISIS-HAWEB.md](./ANALISIS-HAWEB.md).
 
 ## Estado actual
 
-**Fase 0 — Skeleton.** Hello World funcional: lista de luces de tu HA con toggle real.
+**Fase 0 — Skeleton** ✅ Hello World funcional: lista de luces de tu HA con toggle real, optimistic update + reconciliación por WebSocket.
 
-Próximas fases:
+Plan completo de fases (Fase 1 → Fase 6) con criterios de "done" en **[ROADMAP.md](./ROADMAP.md)**.
 
-1. Catálogo de áreas + sidebar de habitaciones (Fase 1)
-2. Cards por dominio (climate, media, sensor, camera) (Fase 2)
-3. DB SQLite con catálogo de UI (Fase 3)
-4. Chat con Claude API + tool_use (Fase 4)
+## Para continuar trabajando
+
+Si abrís Claude Code en este directorio para retomar:
+
+1. Leé [ROADMAP.md](./ROADMAP.md) y verificá la fase actual.
+2. Decile a Claude: **"vamos con Fase X"** según corresponda.
+3. Antes de codear, corré `pnpm dev` y verificá que veas tus luces en `localhost:5173`. Si está roto, arregalo antes de sumar features.
