@@ -65,6 +65,17 @@ export const config = {
   throttle: {
     stateChangedMs: optionalInt('STATE_THROTTLE_MS', 100),
   },
+  proxy: {
+    /**
+     * Hosts adicionales (host:port) permitidos para proxy de imágenes.
+     * El host del HA siempre está implícitamente permitido.
+     * Útil para Music Assistant u otros plugins que sirven artwork desde otra URL.
+     */
+    extraImageHosts: optional('IMAGE_PROXY_EXTRA_HOSTS', '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
 } as const;
 
 export type AppConfig = typeof config;

@@ -9,6 +9,7 @@ import type {
 } from '@dashboard-web/shared';
 import { config } from './config.js';
 import { type HaClient, createHaClient } from './ha/client.js';
+import { registerProxyRoutes } from './proxy.js';
 import { throttleByKey } from './util/throttle.js';
 
 async function main(): Promise<void> {
@@ -54,6 +55,8 @@ async function main(): Promise<void> {
     const areas = await ha.getAllAreas();
     return { areas };
   });
+
+  registerProxyRoutes(fastify);
 
   // Levantamos primero Fastify para tener el server HTTP listo, después montamos Socket.IO encima.
   await fastify.listen({ port: config.server.port, host: config.server.host });

@@ -1,7 +1,8 @@
-import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { Music, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { entityPictureUrl } from '@/lib/proxy';
 import { callService } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import { useEntitiesStore, useEntity } from '@/stores/entities';
@@ -115,6 +116,7 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
   const muted = entity.attributes.is_volume_muted === true;
   const title = entity.attributes.media_title as string | undefined;
   const artist = entity.attributes.media_artist as string | undefined;
+  const artworkUrl = entityPictureUrl(entity.attributes.entity_picture as string | undefined);
   const displayPct = draggingPct ?? realVolumePct;
 
   return (
@@ -141,10 +143,27 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
           </span>
         </div>
 
-        {(title || artist) && (
-          <div className="min-w-0 rounded-md bg-muted/40 px-3 py-2">
-            {title && <div className="truncate text-sm font-medium">{title}</div>}
-            {artist && <div className="truncate text-xs text-muted-foreground">{artist}</div>}
+        {(title || artist || artworkUrl) && (
+          <div className="flex min-w-0 items-center gap-3 rounded-md bg-muted/40 p-2">
+            {artworkUrl ? (
+              <img
+                src={artworkUrl}
+                alt={title ?? 'artwork'}
+                className="h-12 w-12 shrink-0 rounded object-cover"
+                onError={(e) => {
+                  // Si el proxy falla (host no allowed, etc), ocultar el <img>.
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                <Music className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              {title && <div className="truncate text-sm font-medium">{title}</div>}
+              {artist && <div className="truncate text-xs text-muted-foreground">{artist}</div>}
+            </div>
           </div>
         )}
 
