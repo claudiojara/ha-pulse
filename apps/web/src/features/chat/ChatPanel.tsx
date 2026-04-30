@@ -1,5 +1,7 @@
 import { Brain, ChevronRight, RotateCcw, Send, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CardContent } from '@/components/ui/card';
 import { chatReset, chatSend } from '@/lib/socket';
 import { cn } from '@/lib/utils';
@@ -133,8 +135,58 @@ function ItemView({ item }: { item: ChatItem }) {
     case 'assistant_text':
       return (
         <div className="flex justify-start">
-          <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted/60 px-3 py-2 text-sm whitespace-pre-wrap">
-            {item.text}
+          <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted/60 px-3 py-2 text-sm leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Compactar márgenes default de prose para que no abulten en el bubble
+                p: ({ children }) => <p className="my-1 first:mt-0 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="my-1 list-disc pl-5">{children}</ul>,
+                ol: ({ children }) => <ol className="my-1 list-decimal pl-5">{children}</ol>,
+                li: ({ children }) => <li className="my-0.5">{children}</li>,
+                code: ({ children, ...props }) => {
+                  // inline code
+                  return (
+                    <code
+                      className="rounded bg-background/70 px-1 py-0.5 font-mono text-[0.85em]"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                pre: ({ children }) => (
+                  <pre className="my-2 overflow-x-auto rounded bg-background/60 p-2 font-mono text-[0.8em]">
+                    {children}
+                  </pre>
+                ),
+                table: ({ children }) => (
+                  <div className="my-2 overflow-x-auto">
+                    <table className="border-collapse text-xs">{children}</table>
+                  </div>
+                ),
+                th: ({ children }) => (
+                  <th className="border border-border/60 px-2 py-1 text-left font-medium">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="border border-border/60 px-2 py-1">{children}</td>
+                ),
+                a: ({ children, href }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline-offset-2 hover:underline"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {item.text}
+            </ReactMarkdown>
             {item.streaming && (
               <span className="ml-1 inline-block h-3 w-[2px] animate-pulse bg-foreground/60 align-middle" />
             )}
