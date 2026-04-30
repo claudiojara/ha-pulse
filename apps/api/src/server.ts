@@ -8,6 +8,7 @@ import type {
   StateChangedEvent,
 } from '@dashboard-web/shared';
 import { config } from './config.js';
+import { createPrefsDb } from './db/db.js';
 import { type HaClient, createHaClient } from './ha/client.js';
 import { registerProxyRoutes } from './proxy.js';
 import { throttleByKey } from './util/throttle.js';
@@ -56,6 +57,11 @@ async function main(): Promise<void> {
     return { areas };
   });
 
+  const prefsDb = createPrefsDb(config.db.path);
+  fastify.log.info(`[db] preferencias en ${config.db.path}`);
+
+  fastify.get('/api/preferences', async () => prefsDb.getSnapshot());
+
   registerProxyRoutes(fastify);
 
   // Levantamos primero Fastify para tener el server HTTP listo, después montamos Socket.IO encima.
@@ -89,6 +95,10 @@ async function main(): Promise<void> {
     io.emit('entity_areas_updated', map);
   });
 
+  const broadcastPrefs = (): void => {
+    io.emit('preferences_updated', prefsDb.getSnapshot());
+  };
+
   io.on('connection', async (socket) => {
     fastify.log.info({ socketId: socket.id }, '[ws] cliente conectado');
 
@@ -101,6 +111,7 @@ async function main(): Promise<void> {
       socket.emit('initial_states', states);
       socket.emit('initial_areas', areas);
       socket.emit('initial_entity_areas', entityAreas);
+      socket.emit('initial_preferences', prefsDb.getSnapshot());
       socket.emit('connection_status', {
         connected: true,
         haReachable: ha.isConnected(),
@@ -121,6 +132,50 @@ async function main(): Promise<void> {
       }
     });
 
+    socket.on('set_hidden', (payload, ack) => {
+      try {
+        prefsDb.setHidden(payload.entity_id, payload.hidden);
+        broadcastPrefs();
+        ack({ ok: true });
+      } catch (err) {
+        ack({ ok: false, error: err instanceof Error ? err.message : 'unknown' });
+      }
+    });
+
+    socket.on('set_override', (payload, ack) => {
+      try {
+        prefsDb.setOverride({
+          entity_id: payload.entity_id,
+          custom_name: payload.custom_name ?? null,
+          custom_icon: payload.custom_icon ?? null,
+        });
+        broadcastPrefs();
+        ack({ ok: true });
+      } catch (err) {
+        ack({ ok: false, error: err instanceof Error ? err.message : 'unknown' });
+      }
+    });
+
+    socket.on('set_room_layout', (payload, ack) => {
+      try {
+        prefsDb.setRoomLayout(payload.area_id, payload.entity_order);
+        broadcastPrefs();
+        ack({ ok: true });
+      } catch (err) {
+        ack({ ok: false, error: err instanceof Error ? err.message : 'unknown' });
+      }
+    });
+
+    socket.on('set_pref', (payload, ack) => {
+      try {
+        prefsDb.setPref(payload.key, payload.value);
+        broadcastPrefs();
+        ack({ ok: true });
+      } catch (err) {
+        ack({ ok: false, error: err instanceof Error ? err.message : 'unknown' });
+      }
+    });
+
     socket.on('disconnect', () => {
       fastify.log.info({ socketId: socket.id }, '[ws] cliente desconectado');
     });
@@ -134,6 +189,7 @@ async function main(): Promise<void> {
     disposeEntityAreasListener();
     ha.close();
     io.close();
+    prefsDb.close();
     await fastify.close();
     process.exit(0);
   };

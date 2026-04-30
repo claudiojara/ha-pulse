@@ -2,6 +2,10 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
   ServiceCallPayload,
+  SetHiddenPayload,
+  SetOverridePayload,
+  SetPrefPayload,
+  SetRoomLayoutPayload,
 } from '@dashboard-web/shared';
 import { type Socket, io } from 'socket.io-client';
 
@@ -28,5 +32,31 @@ export function getSocket(): AppSocket {
 export function callService(payload: ServiceCallPayload): Promise<{ ok: boolean; error?: string }> {
   return new Promise((resolve) => {
     getSocket().emit('call_service', payload, resolve);
+  });
+}
+
+export function setHiddenPref(payload: SetHiddenPayload): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('set_hidden', payload, resolve);
+  });
+}
+
+export function setOverridePref(payload: SetOverridePayload): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('set_override', payload, resolve);
+  });
+}
+
+export function setRoomLayoutPref(
+  payload: SetRoomLayoutPayload,
+): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('set_room_layout', payload, resolve);
+  });
+}
+
+export function setUserPref(payload: SetPrefPayload): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('set_pref', payload, resolve);
   });
 }

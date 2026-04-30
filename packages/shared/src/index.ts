@@ -70,21 +70,60 @@ export interface ConnectionStatus {
 /** Mapa entity_id → area_id (o null si la entity no tiene área asignada). */
 export type EntityAreaMap = Record<EntityId, string | null>;
 
+export interface EntityOverride {
+  entity_id: EntityId;
+  custom_name: string | null;
+  custom_icon: string | null;
+}
+
+export interface PreferencesSnapshot {
+  hidden_entities: EntityId[];
+  entity_overrides: Record<EntityId, EntityOverride>;
+  room_layouts: Record<string, EntityId[]>;
+  user_prefs: Record<string, string>;
+}
+
 export interface ServerToClientEvents {
   initial_states: (states: HassEntity[]) => void;
   initial_areas: (areas: Area[]) => void;
   initial_entity_areas: (map: EntityAreaMap) => void;
+  initial_preferences: (prefs: PreferencesSnapshot) => void;
   state_changed: (event: StateChangedEvent) => void;
   areas_updated: (areas: Area[]) => void;
   entity_areas_updated: (map: EntityAreaMap) => void;
+  preferences_updated: (prefs: PreferencesSnapshot) => void;
   connection_status: (status: ConnectionStatus) => void;
 }
 
+export interface SetHiddenPayload {
+  entity_id: EntityId;
+  hidden: boolean;
+}
+
+export interface SetOverridePayload {
+  entity_id: EntityId;
+  custom_name?: string | null;
+  custom_icon?: string | null;
+}
+
+export interface SetRoomLayoutPayload {
+  area_id: string;
+  entity_order: EntityId[];
+}
+
+export interface SetPrefPayload {
+  key: string;
+  value: string;
+}
+
+type Ack = (result: { ok: boolean; error?: string }) => void;
+
 export interface ClientToServerEvents {
-  call_service: (
-    payload: ServiceCallPayload,
-    ack: (result: { ok: boolean; error?: string }) => void,
-  ) => void;
+  call_service: (payload: ServiceCallPayload, ack: Ack) => void;
+  set_hidden: (payload: SetHiddenPayload, ack: Ack) => void;
+  set_override: (payload: SetOverridePayload, ack: Ack) => void;
+  set_room_layout: (payload: SetRoomLayoutPayload, ack: Ack) => void;
+  set_pref: (payload: SetPrefPayload, ack: Ack) => void;
 }
 
 export function getDomain(entityId: EntityId): Domain {

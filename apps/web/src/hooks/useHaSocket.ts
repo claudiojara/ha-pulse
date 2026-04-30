@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { getSocket } from '@/lib/socket';
 import { useAreasStore } from '@/stores/areas';
 import { useEntitiesStore } from '@/stores/entities';
+import { usePreferencesStore } from '@/stores/preferences';
 
 /**
  * Bootstrap del socket. Suscribe a initial_states + state_changed + initial_areas +
@@ -15,6 +16,7 @@ export function useHaSocket(): void {
   const setConnection = useEntitiesStore((s) => s.setConnection);
   const setInitialAreas = useAreasStore((s) => s.setInitialAreas);
   const setAreas = useAreasStore((s) => s.setAreas);
+  const applyPreferences = usePreferencesStore((s) => s.applySnapshot);
 
   useEffect(() => {
     const socket = getSocket();
@@ -41,6 +43,16 @@ export function useHaSocket(): void {
     ) => {
       setEntityAreaMap(map);
     };
+    const onInitialPreferences: Parameters<typeof socket.on<'initial_preferences'>>[1] = (
+      prefs,
+    ) => {
+      applyPreferences(prefs);
+    };
+    const onPreferencesUpdated: Parameters<typeof socket.on<'preferences_updated'>>[1] = (
+      prefs,
+    ) => {
+      applyPreferences(prefs);
+    };
     const onStatus: Parameters<typeof socket.on<'connection_status'>>[1] = (status) => {
       setConnection(status);
     };
@@ -61,6 +73,8 @@ export function useHaSocket(): void {
     socket.on('areas_updated', onAreasUpdated);
     socket.on('initial_entity_areas', onInitialEntityAreas);
     socket.on('entity_areas_updated', onEntityAreasUpdated);
+    socket.on('initial_preferences', onInitialPreferences);
+    socket.on('preferences_updated', onPreferencesUpdated);
     socket.on('connection_status', onStatus);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -72,9 +86,19 @@ export function useHaSocket(): void {
       socket.off('areas_updated', onAreasUpdated);
       socket.off('initial_entity_areas', onInitialEntityAreas);
       socket.off('entity_areas_updated', onEntityAreasUpdated);
+      socket.off('initial_preferences', onInitialPreferences);
+      socket.off('preferences_updated', onPreferencesUpdated);
       socket.off('connection_status', onStatus);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
     };
-  }, [setInitial, apply, setEntityAreaMap, setConnection, setInitialAreas, setAreas]);
+  }, [
+    setInitial,
+    apply,
+    setEntityAreaMap,
+    setConnection,
+    setInitialAreas,
+    setAreas,
+    applyPreferences,
+  ]);
 }

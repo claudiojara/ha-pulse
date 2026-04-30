@@ -76,6 +76,10 @@ export const config = {
       .map((s) => s.trim())
       .filter(Boolean),
   },
+  db: {
+    /** Path al SQLite de preferencias. Relativo al cwd del proceso (apps/api). */
+    path: optional('PREFS_DB_PATH', './data/prefs.db'),
+  },
 } as const;
 
 export type AppConfig = typeof config;

@@ -14,6 +14,15 @@ async function waitForAreas(page: Page) {
   ).toBeVisible();
 }
 
+test.beforeEach(async ({ context }) => {
+  // Cada test arranca con localStorage limpio (modo edición OFF, etc).
+  await context.addInitScript(() => {
+    try {
+      window.localStorage.clear();
+    } catch {}
+  });
+});
+
 test.describe('overview', () => {
   test('carga con header, sidebar y lista de luces', async ({ page }) => {
     await page.goto('/');
@@ -43,12 +52,13 @@ test.describe('overview', () => {
     await page.goto('/');
     await waitForAreas(page);
 
-    // Esperar a que aparezca al menos un switch (initial_states ya llegó)
     const switches = page.getByRole('main').getByRole('switch');
     await expect(switches.first()).toBeVisible();
 
-    const counterText = await page.getByRole('banner').getByText(/luces? encendidas?$/).textContent();
-    const m = counterText?.match(/(\d+)/);
+    const counter = page.getByTestId('lights-on-count');
+    await expect(counter).toBeVisible();
+    const counterText = (await counter.textContent()) ?? '';
+    const m = counterText.match(/(\d+)/);
     expect(m, `parsing counter '${counterText}'`).not.toBeNull();
     const expected = Number(m![1]);
 
@@ -154,5 +164,53 @@ test.describe('RoomView', () => {
     const main = page.getByRole('main');
     await expect(main.getByRole('heading', { level: 2 })).toBeVisible();
     await expect(main.getByText('No hay entidades asignadas a esta área.')).toBeVisible();
+  });
+});
+
+test.describe('preferencias de UI', () => {
+  test('modo edición off por default; toggle muestra controles en RoomView', async ({ page }) => {
+    await page.goto('/room/sala');
+    await waitForAreas(page);
+
+    const main = page.getByRole('main');
+    // Esperar a que la grid esté pintada.
+    await expect(main.getByRole('switch').first()).toBeVisible();
+
+    // Sin modo edición: cero controles de edit en cards.
+    await expect(main.getByRole('button', { name: 'Arrastrar para reordenar' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Entrar a modo edición' }).click();
+    await expect(page.getByRole('button', { name: 'Salir de modo edición' })).toBeVisible();
+
+    // Ahora aparecen controles en cada card.
+    const dragHandles = main.getByRole('button', { name: 'Arrastrar para reordenar' });
+    await expect(dragHandles.first()).toBeVisible();
+    const handleCount = await dragHandles.count();
+    expect(handleCount).toBeGreaterThan(0);
+  });
+
+  test('theme toggle alterna la clase dark en <html> (idempotente)', async ({ page }) => {
+    await page.goto('/');
+    await waitForAreas(page);
+
+    const before = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+    const toggleLabel = before ? 'Tema claro' : 'Tema oscuro';
+    await page.getByRole('button', { name: toggleLabel }).click();
+
+    // Esperar a que el cambio se propague (socket round-trip).
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.documentElement.classList.contains('dark')),
+      )
+      .toBe(!before);
+
+    // Volver al estado inicial para no dejar la pref en DB con un valor distinto.
+    const reverseLabel = before ? 'Tema oscuro' : 'Tema claro';
+    await page.getByRole('button', { name: reverseLabel }).click();
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.documentElement.classList.contains('dark')),
+      )
+      .toBe(before);
   });
 });

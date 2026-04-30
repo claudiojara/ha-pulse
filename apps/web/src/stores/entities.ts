@@ -9,6 +9,7 @@ import {
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
+import { usePreferencesStore } from '@/stores/preferences';
 
 interface OptimisticOverride {
   state: string;
@@ -97,17 +98,31 @@ export const useEntitiesStore = create<EntitiesState>((set) => ({
  */
 export function useEntity(entityId: EntityId | undefined): HassEntity | undefined {
   const real = useEntitiesStore((s) => (entityId ? s.entities[entityId] : undefined));
-  const override = useEntitiesStore((s) => (entityId ? s.optimistic[entityId] : undefined));
+  const optimistic = useEntitiesStore((s) =>
+    entityId ? s.optimistic[entityId] : undefined,
+  );
+  const prefOverride = usePreferencesStore((s) =>
+    entityId ? s.overrides[entityId] : undefined,
+  );
 
   return useMemo(() => {
     if (!real) return undefined;
-    if (!override) return real;
-    return {
-      ...real,
-      state: override.state,
-      attributes: { ...real.attributes, ...(override.attributes ?? {}) },
-    };
-  }, [real, override]);
+    let result = real;
+    if (optimistic) {
+      result = {
+        ...result,
+        state: optimistic.state,
+        attributes: { ...result.attributes, ...(optimistic.attributes ?? {}) },
+      };
+    }
+    if (prefOverride && (prefOverride.custom_name || prefOverride.custom_icon)) {
+      const attrs = { ...result.attributes };
+      if (prefOverride.custom_name) attrs.friendly_name = prefOverride.custom_name;
+      if (prefOverride.custom_icon) attrs.icon = prefOverride.custom_icon;
+      result = { ...result, attributes: attrs };
+    }
+    return result;
+  }, [real, optimistic, prefOverride]);
 }
 
 /** Lista de entity_ids que pertenecen al área dada (vía entity_registry/device_registry). */
@@ -145,11 +160,12 @@ export function useEntitiesInArea(areaId: string | undefined): HassEntity[] {
 }
 
 /**
- * Selector de luces sorteadas por nombre. Si se pasa areaId, filtra a las que pertenecen al área.
- * Sin areaId, devuelve todas las luces.
+ * Selector de luces sorteadas por nombre. Si se pasa areaId, filtra a las que
+ * pertenecen al área. Excluye luces ocultas por preferencias del usuario salvo
+ * que esté activo el modo edición.
  */
 export function useLights(areaId?: string): HassEntity[] {
-  return useEntitiesStore(
+  const raw = useEntitiesStore(
     useShallow((s) => {
       const list: HassEntity[] = [];
       for (const e of Object.values(s.entities)) {
@@ -165,18 +181,37 @@ export function useLights(areaId?: string): HassEntity[] {
       return list;
     }),
   );
+  const hidden = usePreferencesStore((s) => s.hidden);
+  const editMode = usePreferencesStore((s) => s.editMode);
+  return useMemo(() => {
+    if (editMode) return raw;
+    return raw.filter((e) => !hidden.has(e.entity_id));
+  }, [raw, hidden, editMode]);
 }
 
-/** Cantidad de luces ENCENDIDAS, considerando override optimista. Reactivo cross-route. */
+/**
+ * Cantidad de luces ENCENDIDAS visibles para el usuario (excluye ocultas).
+ * Considera override optimista. Reactivo cross-route.
+ *
+ * Patrón crítico: cada selector devuelve UNA referencia estable del store
+ * (entities map, optimistic map, hidden set). useMemo computa el count
+ * (primitivo) solo cuando alguna referencia cambia. NUNCA hacer un selector
+ * que retorne un array/objeto recién creado o se dispara loop con
+ * "getSnapshot should be cached".
+ */
 export function useLightsOnCount(): number {
-  return useEntitiesStore((s) => {
+  const entitiesMap = useEntitiesStore((s) => s.entities);
+  const optimistic = useEntitiesStore((s) => s.optimistic);
+  const hidden = usePreferencesStore((s) => s.hidden);
+  return useMemo(() => {
     let count = 0;
-    for (const e of Object.values(s.entities)) {
+    for (const e of Object.values(entitiesMap)) {
       if (getDomain(e.entity_id) !== 'light') continue;
-      const override = s.optimistic[e.entity_id];
-      const on = override ? override.state === 'on' : isOn(e);
+      if (hidden.has(e.entity_id)) continue;
+      const o = optimistic[e.entity_id];
+      const on = o ? o.state === 'on' : isOn(e);
       if (on) count += 1;
     }
     return count;
-  });
+  }, [entitiesMap, optimistic, hidden]);
 }
