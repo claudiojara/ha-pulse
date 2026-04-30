@@ -75,6 +75,17 @@ export const config = {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    /**
+     * Máximo de streams MJPEG concurrentes por cámara. Más viewers que esto
+     * sobre el mismo entity_id reciben 429; el frontend cae a snapshot polling.
+     */
+    cameraMaxStreamsPerEntity: optionalInt('CAMERA_MAX_STREAMS_PER_ENTITY', 3),
+    /**
+     * `Cache-Control: max-age=N` en segundos para snapshots de cámara. 2s es
+     * razonable para snapshot polling: el browser revalida con `If-Modified-Since`,
+     * HA puede devolver 304 si no cambió, evitando re-encode.
+     */
+    cameraSnapshotMaxAge: optionalInt('CAMERA_SNAPSHOT_MAX_AGE', 2),
   },
   db: {
     /** Path al SQLite de preferencias. Relativo al cwd del proceso (apps/api). */

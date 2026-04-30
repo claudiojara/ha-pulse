@@ -54,10 +54,29 @@ async function streamUpstream(
   await reply.send(nodeStream);
 }
 
+// Counter de viewers por entity_id para limitar streams MJPEG concurrentes.
+const liveStreamCount = new Map<string, number>();
+
+function acquireStreamSlot(entityId: string): boolean {
+  const cur = liveStreamCount.get(entityId) ?? 0;
+  if (cur >= config.proxy.cameraMaxStreamsPerEntity) return false;
+  liveStreamCount.set(entityId, cur + 1);
+  return true;
+}
+
+function releaseStreamSlot(entityId: string): void {
+  const cur = liveStreamCount.get(entityId) ?? 0;
+  if (cur <= 1) liveStreamCount.delete(entityId);
+  else liveStreamCount.set(entityId, cur - 1);
+}
+
 export function registerProxyRoutes(fastify: FastifyInstance): void {
   /**
    * MJPEG stream en vivo de una cámara HA. El browser puede consumirlo
    * directo en `<img src=...>` (HA devuelve multipart/x-mixed-replace).
+   *
+   * Limit por entity_id: si ya hay N viewers activos sobre la misma cámara,
+   * devolvemos 429 y el frontend cae a snapshot polling.
    */
   fastify.get<{ Params: { entityId: string } }>(
     '/api/proxy/camera-stream/:entityId',
@@ -66,22 +85,45 @@ export function registerProxyRoutes(fastify: FastifyInstance): void {
       if (!entityId.startsWith('camera.')) {
         return reply.code(400).send({ error: 'invalid entity_id' });
       }
-      const url = `${config.ha.url}/api/camera_proxy_stream/${encodeURIComponent(entityId)}`;
-      const upstream = await fetch(url, {
-        headers: { Authorization: `Bearer ${config.ha.token}` },
-      });
-      if (!upstream.ok) {
-        return reply.code(upstream.status).send({ error: upstream.statusText });
+      if (!acquireStreamSlot(entityId)) {
+        return reply.code(429).send({
+          error: 'stream limit reached',
+          limit: config.proxy.cameraMaxStreamsPerEntity,
+        });
       }
-      await streamUpstream(upstream, reply);
+      // Liberar el slot cuando el cliente cierra la conexión o la respuesta termina.
+      let released = false;
+      const release = (): void => {
+        if (released) return;
+        released = true;
+        releaseStreamSlot(entityId);
+      };
+      req.raw.on('close', release);
+      reply.raw.on('close', release);
+
+      try {
+        const url = `${config.ha.url}/api/camera_proxy_stream/${encodeURIComponent(entityId)}`;
+        const upstream = await fetch(url, {
+          headers: { Authorization: `Bearer ${config.ha.token}` },
+        });
+        if (!upstream.ok) {
+          release();
+          return reply.code(upstream.status).send({ error: upstream.statusText });
+        }
+        await streamUpstream(upstream, reply);
+      } catch (err) {
+        release();
+        throw err;
+      }
     },
   );
 
   /**
    * Snapshot estático de una cámara HA. Útil para previews o como fallback
-   * si MJPEG no está disponible.
+   * si MJPEG no está disponible. Pasa Last-Modified/ETag de HA si vienen,
+   * sino agrega Cache-Control max-age para suavizar el polling.
    */
-  fastify.get<{ Params: { entityId: string } }>(
+  fastify.get<{ Params: { entityId: string }; Headers: Record<string, string> }>(
     '/api/proxy/camera-snapshot/:entityId',
     async (req, reply) => {
       const { entityId } = req.params;
@@ -89,11 +131,28 @@ export function registerProxyRoutes(fastify: FastifyInstance): void {
         return reply.code(400).send({ error: 'invalid entity_id' });
       }
       const url = `${config.ha.url}/api/camera_proxy/${encodeURIComponent(entityId)}`;
-      const upstream = await fetch(url, {
-        headers: { Authorization: `Bearer ${config.ha.token}` },
-      });
+      // Reenviar revalidation headers para que HA pueda responder 304 si no cambió.
+      const fwdHeaders: Record<string, string> = {
+        Authorization: `Bearer ${config.ha.token}`,
+      };
+      const ifNoneMatch = req.headers['if-none-match'];
+      if (typeof ifNoneMatch === 'string') fwdHeaders['If-None-Match'] = ifNoneMatch;
+      const ifModifiedSince = req.headers['if-modified-since'];
+      if (typeof ifModifiedSince === 'string') fwdHeaders['If-Modified-Since'] = ifModifiedSince;
+
+      const upstream = await fetch(url, { headers: fwdHeaders });
+      if (upstream.status === 304) {
+        return reply.code(304).send();
+      }
       if (!upstream.ok) {
         return reply.code(upstream.status).send({ error: upstream.statusText });
+      }
+      // Cache-Control default si HA no lo seteó.
+      if (!upstream.headers.has('cache-control')) {
+        reply.header(
+          'Cache-Control',
+          `private, max-age=${config.proxy.cameraSnapshotMaxAge}`,
+        );
       }
       await streamUpstream(upstream, reply);
     },

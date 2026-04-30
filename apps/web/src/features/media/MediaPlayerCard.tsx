@@ -1,4 +1,14 @@
-import { Music, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Music,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -14,6 +24,7 @@ interface MediaPlayerCardProps {
 // Bitmask de supported_features (HA media_player constants).
 const FEAT = {
   PAUSE: 1,
+  SEEK: 2,
   VOLUME_SET: 4,
   VOLUME_MUTE: 8,
   PREVIOUS_TRACK: 16,
@@ -31,6 +42,7 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
   const clearOptimistic = useEntitiesStore((s) => s.clearOptimistic);
 
   const [draggingPct, setDraggingPct] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const lastSentRef = useRef<number>(0);
 
   const handleService = useCallback(
@@ -116,8 +128,13 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
   const muted = entity.attributes.is_volume_muted === true;
   const title = entity.attributes.media_title as string | undefined;
   const artist = entity.attributes.media_artist as string | undefined;
+  const album = entity.attributes.media_album_name as string | undefined;
   const artworkUrl = entityPictureUrl(entity.attributes.entity_picture as string | undefined);
   const displayPct = draggingPct ?? realVolumePct;
+  const position = entity.attributes.media_position as number | undefined;
+  const duration = entity.attributes.media_duration as number | undefined;
+  const hasMedia = Boolean(title || artist || artworkUrl);
+  const canExpand = hasMedia && !isUnavailable && !isOff;
 
   return (
     <Card>
@@ -129,21 +146,78 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
             </div>
             <div className="truncate text-xs text-muted-foreground">{entity.entity_id}</div>
           </div>
-          <span
-            className={cn(
-              'shrink-0 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wide',
-              isPlaying
-                ? 'bg-primary/15 text-primary'
-                : isUnavailable
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-muted/60 text-muted-foreground',
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className={cn(
+                'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                isPlaying
+                  ? 'bg-primary/15 text-primary'
+                  : isUnavailable
+                    ? 'bg-muted text-muted-foreground'
+                    : 'bg-muted/60 text-muted-foreground',
+              )}
+            >
+              {state}
+            </span>
+            {canExpand && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={expanded ? 'Colapsar' : 'Expandir'}
+                aria-expanded={expanded}
+              >
+                {expanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
             )}
-          >
-            {state}
-          </span>
+          </div>
         </div>
 
-        {(title || artist || artworkUrl) && (
+        {hasMedia && expanded && (
+          <div className="flex flex-col items-center gap-3 rounded-md bg-muted/40 p-3">
+            {artworkUrl ? (
+              <img
+                src={artworkUrl}
+                alt={title ?? 'artwork'}
+                className="aspect-square w-full max-w-[240px] rounded object-cover shadow-md"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="flex aspect-square w-full max-w-[240px] items-center justify-center rounded bg-muted text-muted-foreground">
+                <Music className="h-12 w-12" />
+              </div>
+            )}
+            <div className="w-full min-w-0 text-center">
+              {title && <div className="truncate text-base font-medium">{title}</div>}
+              {artist && <div className="truncate text-sm text-muted-foreground">{artist}</div>}
+              {album && (
+                <div className="truncate text-xs text-muted-foreground/80">{album}</div>
+              )}
+            </div>
+            {has(FEAT.SEEK) && typeof duration === 'number' && duration > 0 && (
+              <div className="flex w-full items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                <span className="w-10 text-right">{formatTime(position ?? 0)}</span>
+                <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-primary"
+                    style={{
+                      width: `${Math.min(100, ((position ?? 0) / duration) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="w-10">{formatTime(duration)}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasMedia && !expanded && (
           <div className="flex min-w-0 items-center gap-3 rounded-md bg-muted/40 p-2">
             {artworkUrl ? (
               <img
@@ -151,7 +225,6 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
                 alt={title ?? 'artwork'}
                 className="h-12 w-12 shrink-0 rounded object-cover"
                 onError={(e) => {
-                  // Si el proxy falla (host no allowed, etc), ocultar el <img>.
                   e.currentTarget.style.display = 'none';
                 }}
               />
@@ -257,4 +330,12 @@ function IconButton({ onClick, children, 'aria-label': ariaLabel }: IconButtonPr
 function pctFromLevel(level: number | undefined): number {
   if (level === undefined || Number.isNaN(level)) return 0;
   return Math.max(0, Math.min(100, Math.round(level * 100)));
+}
+
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
