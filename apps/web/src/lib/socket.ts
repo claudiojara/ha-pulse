@@ -60,3 +60,15 @@ export function setUserPref(payload: SetPrefPayload): Promise<{ ok: boolean; err
     getSocket().emit('set_pref', payload, resolve);
   });
 }
+
+export function chatSend(text: string): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('chat_send', text, resolve);
+  });
+}
+
+export function chatReset(): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    getSocket().emit('chat_reset', resolve);
+  });
+}

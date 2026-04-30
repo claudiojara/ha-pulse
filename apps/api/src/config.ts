@@ -80,6 +80,12 @@ export const config = {
     /** Path al SQLite de preferencias. Relativo al cwd del proceso (apps/api). */
     path: optional('PREFS_DB_PATH', './data/prefs.db'),
   },
+  anthropic: {
+    /** API key para chat con Claude (Fase 4). Vacío = chat deshabilitado. */
+    apiKey: optional('ANTHROPIC_API_KEY', ''),
+    /** Modelo default. Sonnet 4.6 — balance speed/intelligence para tool-use HA. */
+    model: optional('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+  },
 } as const;
 
 export type AppConfig = typeof config;

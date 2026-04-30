@@ -83,6 +83,30 @@ export interface PreferencesSnapshot {
   user_prefs: Record<string, string>;
 }
 
+export interface ChatToolUseEvent {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ChatToolResultEvent {
+  id: string;
+  result: unknown;
+  is_error: boolean;
+}
+
+export interface ChatUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+}
+
+export interface ChatDoneEvent {
+  stop_reason: string | null;
+  usage: ChatUsage;
+}
+
 export interface ServerToClientEvents {
   initial_states: (states: HassEntity[]) => void;
   initial_areas: (areas: Area[]) => void;
@@ -93,6 +117,15 @@ export interface ServerToClientEvents {
   entity_areas_updated: (map: EntityAreaMap) => void;
   preferences_updated: (prefs: PreferencesSnapshot) => void;
   connection_status: (status: ConnectionStatus) => void;
+  chat_text_start: () => void;
+  chat_text_delta: (delta: string) => void;
+  chat_thinking_start: () => void;
+  chat_thinking_delta: (delta: string) => void;
+  chat_tool_use_start: (event: { id: string; name: string }) => void;
+  chat_tool_use: (event: ChatToolUseEvent) => void;
+  chat_tool_result: (event: ChatToolResultEvent) => void;
+  chat_done: (event: ChatDoneEvent) => void;
+  chat_error: (message: string) => void;
 }
 
 export interface SetHiddenPayload {
@@ -124,6 +157,8 @@ export interface ClientToServerEvents {
   set_override: (payload: SetOverridePayload, ack: Ack) => void;
   set_room_layout: (payload: SetRoomLayoutPayload, ack: Ack) => void;
   set_pref: (payload: SetPrefPayload, ack: Ack) => void;
+  chat_send: (text: string, ack: Ack) => void;
+  chat_reset: (ack: Ack) => void;
 }
 
 export function getDomain(entityId: EntityId): Domain {

@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { MessageSquare } from 'lucide-react';
 import { useAreasList } from '@/stores/areas';
 
 export function Sidebar() {
@@ -14,6 +15,14 @@ export function Sidebar() {
           activeProps={{ 'data-active': 'true' }}
         >
           Overview
+        </Link>
+        <Link
+          to="/chat"
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground data-[active=true]:bg-muted data-[active=true]:text-foreground data-[active=true]:font-medium"
+          activeProps={{ 'data-active': 'true' }}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Chat
         </Link>
         {areas.length === 0 ? (
           <p className="px-3 py-2 text-xs text-muted-foreground">Cargando áreas…</p>

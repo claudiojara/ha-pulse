@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { getSocket } from '@/lib/socket';
 import { useAreasStore } from '@/stores/areas';
+import { useChatStore } from '@/stores/chat';
 import { useEntitiesStore } from '@/stores/entities';
 import { usePreferencesStore } from '@/stores/preferences';
 
@@ -17,6 +18,7 @@ export function useHaSocket(): void {
   const setInitialAreas = useAreasStore((s) => s.setInitialAreas);
   const setAreas = useAreasStore((s) => s.setAreas);
   const applyPreferences = usePreferencesStore((s) => s.applySnapshot);
+  const chat = useChatStore.getState; // acceso fresco al store en cada handler
 
   useEffect(() => {
     const socket = getSocket();
@@ -67,6 +69,21 @@ export function useHaSocket(): void {
       setConnection({ connected: false, haReachable: false, lastSync: null });
     };
 
+    const onChatTextStart = () => chat().startText();
+    const onChatTextDelta = (delta: string) => chat().appendText(delta);
+    const onChatThinkingStart = () => chat().startThinking();
+    const onChatThinkingDelta = (delta: string) => chat().appendThinking(delta);
+    const onChatToolUseStart: Parameters<typeof socket.on<'chat_tool_use_start'>>[1] = (
+      e,
+    ) => chat().startToolUse(e);
+    const onChatToolUse: Parameters<typeof socket.on<'chat_tool_use'>>[1] = (e) =>
+      chat().finalizeToolUse(e);
+    const onChatToolResult: Parameters<typeof socket.on<'chat_tool_result'>>[1] = (e) =>
+      chat().setToolResult(e);
+    const onChatDone: Parameters<typeof socket.on<'chat_done'>>[1] = (e) => chat().done(e);
+    const onChatError: Parameters<typeof socket.on<'chat_error'>>[1] = (m) =>
+      chat().error(m);
+
     socket.on('initial_states', onInitial);
     socket.on('state_changed', onStateChanged);
     socket.on('initial_areas', onInitialAreas);
@@ -78,6 +95,15 @@ export function useHaSocket(): void {
     socket.on('connection_status', onStatus);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('chat_text_start', onChatTextStart);
+    socket.on('chat_text_delta', onChatTextDelta);
+    socket.on('chat_thinking_start', onChatThinkingStart);
+    socket.on('chat_thinking_delta', onChatThinkingDelta);
+    socket.on('chat_tool_use_start', onChatToolUseStart);
+    socket.on('chat_tool_use', onChatToolUse);
+    socket.on('chat_tool_result', onChatToolResult);
+    socket.on('chat_done', onChatDone);
+    socket.on('chat_error', onChatError);
 
     return () => {
       socket.off('initial_states', onInitial);
@@ -91,6 +117,15 @@ export function useHaSocket(): void {
       socket.off('connection_status', onStatus);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('chat_text_start', onChatTextStart);
+      socket.off('chat_text_delta', onChatTextDelta);
+      socket.off('chat_thinking_start', onChatThinkingStart);
+      socket.off('chat_thinking_delta', onChatThinkingDelta);
+      socket.off('chat_tool_use_start', onChatToolUseStart);
+      socket.off('chat_tool_use', onChatToolUse);
+      socket.off('chat_tool_result', onChatToolResult);
+      socket.off('chat_done', onChatDone);
+      socket.off('chat_error', onChatError);
     };
   }, [
     setInitial,
@@ -100,5 +135,6 @@ export function useHaSocket(): void {
     setInitialAreas,
     setAreas,
     applyPreferences,
+    chat,
   ]);
 }

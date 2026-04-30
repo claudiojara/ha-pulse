@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@dashboard-web/shared": "workspace:*",
     "@fastify/cors": "^10.0.1",
     "better-sqlite3": "^12.9.0",

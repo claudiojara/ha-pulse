@@ -8,6 +8,7 @@ import type {
   StateChangedEvent,
 } from '@dashboard-web/shared';
 import { config } from './config.js';
+import { createChatRunner, disposeChatSession } from './chat/handler.js';
 import { createPrefsDb } from './db/db.js';
 import { type HaClient, createHaClient } from './ha/client.js';
 import { registerProxyRoutes } from './proxy.js';
@@ -63,6 +64,13 @@ async function main(): Promise<void> {
   fastify.get('/api/preferences', async () => prefsDb.getSnapshot());
 
   registerProxyRoutes(fastify);
+
+  const chatRunner = createChatRunner({ ha });
+  if (chatRunner) {
+    fastify.log.info(`[chat] habilitado con modelo ${config.anthropic.model}`);
+  } else {
+    fastify.log.warn('[chat] deshabilitado: ANTHROPIC_API_KEY no seteada');
+  }
 
   // Levantamos primero Fastify para tener el server HTTP listo, después montamos Socket.IO encima.
   await fastify.listen({ port: config.server.port, host: config.server.host });
@@ -176,8 +184,30 @@ async function main(): Promise<void> {
       }
     });
 
+    socket.on('chat_send', async (text, ack) => {
+      if (!chatRunner) {
+        ack({ ok: false, error: 'chat deshabilitado: API key no configurada' });
+        return;
+      }
+      try {
+        ack({ ok: true });
+        await chatRunner.send(text, socket);
+      } catch (err) {
+        socket.emit(
+          'chat_error',
+          err instanceof Error ? err.message : 'unknown chat error',
+        );
+      }
+    });
+
+    socket.on('chat_reset', (ack) => {
+      if (chatRunner) chatRunner.reset(socket);
+      ack({ ok: true });
+    });
+
     socket.on('disconnect', () => {
       fastify.log.info({ socketId: socket.id }, '[ws] cliente desconectado');
+      disposeChatSession(socket.id);
     });
   });
 
