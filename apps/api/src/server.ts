@@ -65,9 +65,9 @@ async function main(): Promise<void> {
 
   registerProxyRoutes(fastify);
 
-  const chatRunner = createChatRunner({ ha });
+  const chatRunner = createChatRunner({ ha, db: prefsDb });
   if (chatRunner) {
-    fastify.log.info(`[chat] habilitado con modelo ${config.anthropic.model}`);
+    fastify.log.info('[chat] habilitado (auto-switch haiku/sonnet 4.5/4.6)');
   } else {
     fastify.log.warn('[chat] deshabilitado: ANTHROPIC_API_KEY no seteada');
   }
@@ -120,6 +120,9 @@ async function main(): Promise<void> {
       socket.emit('initial_areas', areas);
       socket.emit('initial_entity_areas', entityAreas);
       socket.emit('initial_preferences', prefsDb.getSnapshot());
+      if (chatRunner) {
+        socket.emit('initial_chat_history', chatRunner.loadHistoryItems(socket.id));
+      }
       socket.emit('connection_status', {
         connected: true,
         haReachable: ha.isConnected(),

@@ -25,6 +25,14 @@ export interface PreferencesSnapshot {
   user_prefs: UserPrefs;
 }
 
+export interface ChatStoredMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  /** Content del MessageParam de Anthropic (string o array de blocks) serializado. */
+  content_json: string;
+  created_at: number;
+}
+
 export interface PrefsDb {
   getSnapshot(): PreferencesSnapshot;
   setHidden(entityId: string, hidden: boolean): void;
@@ -32,6 +40,9 @@ export interface PrefsDb {
   clearOverride(entityId: string): void;
   setRoomLayout(areaId: string, order: string[]): void;
   setPref(key: string, value: string): void;
+  appendChatMessage(role: 'user' | 'assistant', contentJson: string): void;
+  getChatHistory(): ChatStoredMessage[];
+  clearChatHistory(): void;
   close(): void;
 }
 
@@ -104,6 +115,16 @@ export function createPrefsDb(dbPath: string): PrefsDb {
          value      = excluded.value,
          updated_at = strftime('%s','now') * 1000`,
     ),
+    insertChatMessage: db.prepare<[string, string]>(
+      'INSERT INTO chat_messages (role, content_json) VALUES (?, ?)',
+    ),
+    selectChatHistory: db.prepare<
+      [],
+      { id: number; role: 'user' | 'assistant'; content_json: string; created_at: number }
+    >(
+      'SELECT id, role, content_json, created_at FROM chat_messages ORDER BY created_at ASC, id ASC',
+    ),
+    deleteChatHistory: db.prepare('DELETE FROM chat_messages'),
   };
 
   return {
@@ -157,6 +178,15 @@ export function createPrefsDb(dbPath: string): PrefsDb {
     },
     setPref(key, value) {
       stmts.upsertPref.run(key, value);
+    },
+    appendChatMessage(role, contentJson) {
+      stmts.insertChatMessage.run(role, contentJson);
+    },
+    getChatHistory() {
+      return stmts.selectChatHistory.all();
+    },
+    clearChatHistory() {
+      stmts.deleteChatHistory.run();
     },
     close() {
       db.close();

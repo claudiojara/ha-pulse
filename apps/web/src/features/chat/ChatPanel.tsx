@@ -11,6 +11,8 @@ export function ChatPanel() {
   const items = useChatItems();
   const busy = useChatStore((s) => s.busy);
   const lastUsage = useChatStore((s) => s.lastUsage);
+  const lastModel = useChatStore((s) => s.lastModel);
+  const lastTtfcMs = useChatStore((s) => s.lastTtfcMs);
   const setBusy = useChatStore((s) => s.setBusy);
   const pushUser = useChatStore((s) => s.pushUser);
   const reset = useChatStore((s) => s.reset);
@@ -51,11 +53,29 @@ export function ChatPanel() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {lastModel && (
+            <span
+              className={cn(
+                'rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide',
+                lastModel.includes('haiku')
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-primary/15 text-primary',
+              )}
+              title={lastModel}
+            >
+              {lastModel.includes('haiku') ? 'haiku' : 'sonnet'}
+            </span>
+          )}
+          {lastTtfcMs !== null && (
+            <span className="text-xs text-muted-foreground" title="Time to first chunk">
+              {lastTtfcMs} ms
+            </span>
+          )}
           {lastUsage && (
             <span className="text-xs text-muted-foreground">
               {lastUsage.cache_read_input_tokens > 0 && (
                 <span className="mr-2 text-primary/70">
-                  cache hit: {lastUsage.cache_read_input_tokens} tok
+                  cache: {lastUsage.cache_read_input_tokens}
                 </span>
               )}
               {lastUsage.input_tokens}↑ / {lastUsage.output_tokens}↓

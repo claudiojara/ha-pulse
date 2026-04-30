@@ -27,14 +27,14 @@ export const tools = [
   {
     name: 'search_entities',
     description:
-      'Busca entidades de HA por nombre amigable o entity_id. Devuelve hasta 30 matches con su state actual y atributos clave. Usar para descubrir qué entidades hay antes de operar sobre ellas.',
+      'Busca entidades de HA. Si se pasa `query` filtra por nombre amigable / entity_id (case-insensitive). Si se omite, devuelve todas las entidades que matchean los demás filtros. Para listar TODAS las luces de un área, usá domain="light" + area_id="sala" sin query. Devuelve hasta 30 hits.',
     input_schema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
           description:
-            'Texto a buscar dentro del friendly_name o entity_id (case-insensitive). Ejemplo: "luz", "tv sala", "temperatura".',
+            'Opcional. Texto a buscar en friendly_name o entity_id. Si querés todo lo del filtro, omitir.',
         },
         domain: {
           type: 'string',
@@ -46,7 +46,7 @@ export const tools = [
           description: 'Filtrar por área. Ejemplo: "sala", "oficina". Opcional.',
         },
       },
-      required: ['query'],
+      required: [],
       additionalProperties: false,
     },
   },
@@ -127,7 +127,7 @@ interface CallServiceArgs {
 }
 
 interface SearchArgs {
-  query: string;
+  query?: string;
   domain?: string;
   area_id?: string;
 }
@@ -208,13 +208,15 @@ function searchEntities(
   entityArea: Record<string, string | null>,
   args: SearchArgs,
 ): { hits: SearchHit[]; total_matches: number; truncated: boolean } {
-  const q = args.query.toLowerCase();
+  const q = args.query?.trim().toLowerCase() ?? '';
   const out: SearchHit[] = [];
   for (const e of states) {
     if (args.domain && !e.entity_id.startsWith(`${args.domain}.`)) continue;
     if (args.area_id && entityArea[e.entity_id] !== args.area_id) continue;
-    const name = (e.attributes.friendly_name ?? e.entity_id).toLowerCase();
-    if (!name.includes(q) && !e.entity_id.toLowerCase().includes(q)) continue;
+    if (q.length > 0) {
+      const name = (e.attributes.friendly_name ?? e.entity_id).toLowerCase();
+      if (!name.includes(q) && !e.entity_id.toLowerCase().includes(q)) continue;
+    }
     out.push({
       entity_id: e.entity_id,
       friendly_name: (e.attributes.friendly_name as string | undefined) ?? e.entity_id,

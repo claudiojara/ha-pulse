@@ -104,8 +104,29 @@ export interface ChatUsage {
 
 export interface ChatDoneEvent {
   stop_reason: string | null;
+  /** Modelo Anthropic usado en este turn (claude-haiku-4-5 / claude-sonnet-4-6). */
+  model: string;
   usage: ChatUsage;
 }
+
+/**
+ * Representación lineal del chat para el frontend. Cada item es lo que se renderiza
+ * en orden. El backend reconstruye este array al reconectar a partir del historial
+ * persistido en SQLite.
+ */
+export type ChatItem =
+  | { kind: 'user'; id: string; text: string }
+  | { kind: 'assistant_text'; id: string; text: string; streaming: boolean }
+  | { kind: 'thinking'; id: string; text: string; streaming: boolean }
+  | {
+      kind: 'tool_use';
+      id: string;
+      name: string;
+      input: unknown;
+      result?: ChatToolResultEvent;
+      streaming: boolean;
+    }
+  | { kind: 'error'; id: string; message: string };
 
 export interface ServerToClientEvents {
   initial_states: (states: HassEntity[]) => void;
@@ -117,6 +138,7 @@ export interface ServerToClientEvents {
   entity_areas_updated: (map: EntityAreaMap) => void;
   preferences_updated: (prefs: PreferencesSnapshot) => void;
   connection_status: (status: ConnectionStatus) => void;
+  initial_chat_history: (items: ChatItem[]) => void;
   chat_text_start: () => void;
   chat_text_delta: (delta: string) => void;
   chat_thinking_start: () => void;

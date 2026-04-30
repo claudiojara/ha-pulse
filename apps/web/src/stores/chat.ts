@@ -1,31 +1,13 @@
 import type {
   ChatDoneEvent,
+  ChatItem,
   ChatToolResultEvent,
   ChatToolUseEvent,
 } from '@dashboard-web/shared';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
 
-/**
- * Modelo unificado de "elementos visibles" en el chat. Cada turno del usuario es un
- * UserMessage. Cada respuesta del assistant puede tener múltiples bloques (texto,
- * thinking, tool_use con su result). Modelamos cada bloque como un elemento independiente
- * con un id estable, para poder renderizarlos en el orden en que llegan via streaming.
- */
-
-export type ChatItem =
-  | { kind: 'user'; id: string; text: string }
-  | { kind: 'assistant_text'; id: string; text: string; streaming: boolean }
-  | { kind: 'thinking'; id: string; text: string; streaming: boolean }
-  | {
-      kind: 'tool_use';
-      id: string;
-      name: string;
-      input: unknown;
-      result?: ChatToolResultEvent;
-      streaming: boolean;
-    }
-  | { kind: 'error'; id: string; message: string };
+export type { ChatItem };
 
 interface ChatState {
   items: ChatItem[];
@@ -33,8 +15,16 @@ interface ChatState {
   busy: boolean;
   /** Última métrica de uso reportada por chat_done (para mostrar tokens/cache hit). */
   lastUsage: ChatDoneEvent['usage'] | null;
+  /** Modelo del último turn (haiku/sonnet) para mostrar como badge en el header. */
+  lastModel: string | null;
+  /** Timestamp del último mensaje enviado para calcular TTFC. */
+  pendingSentAt: number | null;
+  /** Time To First Chunk en ms del último turn. */
+  lastTtfcMs: number | null;
 
+  applyHistory: (items: ChatItem[]) => void;
   pushUser: (text: string) => void;
+  noteFirstChunk: () => void;
   startText: () => void;
   appendText: (delta: string) => void;
   startThinking: () => void;
@@ -55,9 +45,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   items: [],
   busy: false,
   lastUsage: null,
+  lastModel: null,
+  pendingSentAt: null,
+  lastTtfcMs: null,
+
+  applyHistory: (items) => set({ items }),
 
   pushUser: (text) =>
-    set((s) => ({ items: [...s.items, { kind: 'user', id: nextId('user'), text }] })),
+    set((s) => ({
+      items: [...s.items, { kind: 'user', id: nextId('user'), text }],
+      pendingSentAt: Date.now(),
+      lastTtfcMs: null,
+    })),
+
+  noteFirstChunk: () => {
+    const { pendingSentAt } = get();
+    if (pendingSentAt == null) return;
+    set({ lastTtfcMs: Date.now() - pendingSentAt, pendingSentAt: null });
+  },
 
   setBusy: (busy) => set({ busy }),
 
@@ -141,17 +146,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
       busy: false,
       lastUsage: event.usage,
+      lastModel: event.model,
     }));
-    void get; // silenciar lint si no se usa
   },
 
   error: (message) =>
     set((s) => ({
       items: [...s.items, { kind: 'error', id: nextId('err'), message }],
       busy: false,
+      pendingSentAt: null,
     })),
 
-  reset: () => set({ items: [], busy: false, lastUsage: null }),
+  reset: () =>
+    set({
+      items: [],
+      busy: false,
+      lastUsage: null,
+      lastModel: null,
+      pendingSentAt: null,
+      lastTtfcMs: null,
+    }),
 }));
 
 export function useChatItems(): ChatItem[] {

@@ -69,9 +69,20 @@ export function useHaSocket(): void {
       setConnection({ connected: false, haReachable: false, lastSync: null });
     };
 
-    const onChatTextStart = () => chat().startText();
+    const onInitialChatHistory: Parameters<typeof socket.on<'initial_chat_history'>>[1] = (
+      items,
+    ) => {
+      chat().applyHistory(items);
+    };
+    const onChatTextStart = () => {
+      chat().noteFirstChunk();
+      chat().startText();
+    };
     const onChatTextDelta = (delta: string) => chat().appendText(delta);
-    const onChatThinkingStart = () => chat().startThinking();
+    const onChatThinkingStart = () => {
+      chat().noteFirstChunk();
+      chat().startThinking();
+    };
     const onChatThinkingDelta = (delta: string) => chat().appendThinking(delta);
     const onChatToolUseStart: Parameters<typeof socket.on<'chat_tool_use_start'>>[1] = (
       e,
@@ -95,6 +106,7 @@ export function useHaSocket(): void {
     socket.on('connection_status', onStatus);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('initial_chat_history', onInitialChatHistory);
     socket.on('chat_text_start', onChatTextStart);
     socket.on('chat_text_delta', onChatTextDelta);
     socket.on('chat_thinking_start', onChatThinkingStart);
@@ -117,6 +129,7 @@ export function useHaSocket(): void {
       socket.off('connection_status', onStatus);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('initial_chat_history', onInitialChatHistory);
       socket.off('chat_text_start', onChatTextStart);
       socket.off('chat_text_delta', onChatTextDelta);
       socket.off('chat_thinking_start', onChatThinkingStart);

@@ -1,30 +1,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Socket } from 'socket.io';
 import type {
+  ChatItem,
   ClientToServerEvents,
   ServerToClientEvents,
 } from '@dashboard-web/shared';
 import { config } from '../config.js';
+import type { PrefsDb } from '../db/db.js';
 import type { HaClient } from '../ha/client.js';
 import { type ToolContext, executeTool, tools } from './tools.js';
 
-/**
- * Sliding window: cuántos turnos máximos retenemos en memoria.
- * Un "turno" = un message (user / assistant / tool_result aggregator).
- */
+/** Sliding window: cuántos mensajes (de cualquier rol) retenemos. */
 const MAX_TURNS = 30;
 
-/**
- * Default `effort` para Sonnet 4.6. `medium` balancea calidad vs costo.
- * Para queries más complejas el agente puede usar más tokens; thinking adaptativo
- * decide solo cuándo pensar.
- */
-const DEFAULT_EFFORT = 'medium' as const;
+/** Modelos. Auto-switch arranca en Haiku para queries triviales. */
+const HAIKU_MODEL = 'claude-haiku-4-5';
+const SONNET_MODEL = 'claude-sonnet-4-6';
 
 /**
- * System prompt cacheado. Estable entre requests — cualquier cambio en este string
- * invalida el cache. NO interpolar timestamps, IDs ni cosas variables acá.
- * (Ver shared/prompt-caching.md → silent invalidators.)
+ * System prompt cacheado. NO interpolar timestamps, IDs ni cosas variables.
+ * Cualquier byte que cambie acá invalida el cache.
  */
 const SYSTEM_PROMPT = `Sos un asistente conversacional para un dashboard de Home Assistant. Hablás en castellano rioplatense, directo y al grano.
 
@@ -46,15 +41,33 @@ Pautas:
 
 interface ConversationState {
   messages: Anthropic.MessageParam[];
+  /** Modelo activo para esta sesión. Una vez que escala a Sonnet queda ahí hasta reset. */
+  model: typeof HAIKU_MODEL | typeof SONNET_MODEL;
+  loaded: boolean;
 }
 
 const sessions = new Map<string, ConversationState>();
 
-function getSession(socketId: string): ConversationState {
+function getSession(socketId: string, db: PrefsDb): ConversationState {
   let s = sessions.get(socketId);
   if (!s) {
-    s = { messages: [] };
+    s = { messages: [], model: HAIKU_MODEL, loaded: false };
     sessions.set(socketId, s);
+  }
+  if (!s.loaded) {
+    // Cargar historial persistido. Si encontramos algún tool_use en el historial,
+    // significa que ya se "escaló" antes — arrancamos directamente en Sonnet.
+    const stored = db.getChatHistory();
+    let escalated = false;
+    for (const row of stored) {
+      const content = JSON.parse(row.content_json) as Anthropic.MessageParam['content'];
+      s.messages.push({ role: row.role, content } as Anthropic.MessageParam);
+      if (row.role === 'assistant' && Array.isArray(content)) {
+        if (content.some((b) => b.type === 'tool_use')) escalated = true;
+      }
+    }
+    if (escalated) s.model = SONNET_MODEL;
+    s.loaded = true;
   }
   return s;
 }
@@ -64,9 +77,8 @@ export function disposeChatSession(socketId: string): void {
 }
 
 /**
- * Recorta el array de mensajes manteniendo los últimos MAX_TURNS, pero asegurando
- * que el primero sea siempre un `user` y que cada `tool_use` tenga su `tool_result`.
- * Si el corte deja un tool_use huérfano, descartamos hasta el siguiente user "limpio".
+ * Recorta mensajes manteniendo los últimos MAX_TURNS, preservando que el primer
+ * mensaje sea un user con texto y no un tool_result huérfano.
  */
 function pruneMessages(state: ConversationState): void {
   if (state.messages.length <= MAX_TURNS) return;
@@ -77,8 +89,6 @@ function pruneMessages(state: ConversationState): void {
       start += 1;
       continue;
     }
-    // El primer user no puede ser un tool_result aislado — necesita la conversación previa
-    // que lo justifica. Avanzar hasta un user con texto plano.
     const content = m.content;
     if (typeof content === 'string') break;
     if (Array.isArray(content) && content.some((c) => c.type === 'text')) break;
@@ -90,25 +100,34 @@ function pruneMessages(state: ConversationState): void {
 export interface ChatRunner {
   send(text: string, socket: ChatSocket): Promise<void>;
   reset(socket: ChatSocket): void;
+  loadHistoryItems(socketId: string): ChatItem[];
 }
 
 type ChatSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
-export function createChatRunner(opts: { ha: HaClient }): ChatRunner | null {
+export function createChatRunner(opts: { ha: HaClient; db: PrefsDb }): ChatRunner | null {
   if (!config.anthropic.apiKey) return null;
   const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
   return {
     reset(socket) {
       sessions.delete(socket.id);
+      opts.db.clearChatHistory();
+    },
+
+    loadHistoryItems(socketId) {
+      const state = getSession(socketId, opts.db);
+      return convertToItems(state.messages);
     },
 
     async send(text, socket) {
-      const state = getSession(socket.id);
-      state.messages.push({ role: 'user', content: text });
+      const state = getSession(socket.id, opts.db);
+      const userMsg: Anthropic.MessageParam = { role: 'user', content: text };
+      state.messages.push(userMsg);
+      opts.db.appendChatMessage('user', JSON.stringify(text));
 
       try {
-        await runAgenticLoop(client, state, socket, opts.ha);
+        await runAgenticLoop(client, state, socket, opts.ha, opts.db);
       } catch (err) {
         const message = err instanceof Anthropic.APIError ? err.message : String(err);
         socket.emit('chat_error', message);
@@ -124,16 +143,18 @@ async function runAgenticLoop(
   state: ConversationState,
   socket: ChatSocket,
   ha: HaClient,
+  db: PrefsDb,
 ): Promise<void> {
-  // Para search_entities con filtro por área necesitamos el mapa actual.
   const entityArea = await ha.getEntityAreaMap();
   const ctx: ToolContext = { ha, entityArea };
 
   while (true) {
-    // Spread tool list cast — readonly-as-mutable es seguro acá; el SDK no muta.
-    const stream = client.messages.stream({
-      model: config.anthropic.model,
-      max_tokens: 16000,
+    const isHaiku = state.model === HAIKU_MODEL;
+    // Haiku 4.5 NO soporta ni `adaptive thinking` ni `output_config.effort` —
+    // los reservamos para Sonnet. Para Haiku confiamos en su rapidez nativa.
+    const baseRequest: Anthropic.MessageStreamParams = {
+      model: state.model,
+      max_tokens: isHaiku ? 8000 : 16000,
       system: [
         {
           type: 'text',
@@ -142,12 +163,14 @@ async function runAgenticLoop(
         },
       ],
       tools: [...tools] as Anthropic.Tool[],
-      thinking: { type: 'adaptive' },
-      output_config: { effort: DEFAULT_EFFORT },
       messages: state.messages,
-    });
+      ...(isHaiku
+        ? {}
+        : { thinking: { type: 'adaptive' }, output_config: { effort: 'medium' } }),
+    };
 
-    // Track tool_use blocks que se van armando entre content_block_start/_stop.
+    const stream = client.messages.stream(baseRequest);
+
     type Pending = { id: string; name: string; jsonBuf: string };
     const pendingByIndex = new Map<number, Pending>();
     const completedToolUses: Array<{ id: string; name: string; input: unknown }> = [];
@@ -191,8 +214,13 @@ async function runAgenticLoop(
 
     const finalMessage = await stream.finalMessage();
     state.messages.push({ role: 'assistant', content: finalMessage.content });
+    db.appendChatMessage('assistant', JSON.stringify(finalMessage.content));
 
     if (finalMessage.stop_reason === 'tool_use' && completedToolUses.length > 0) {
+      // El primer tool_use de la sesión escala el modelo a Sonnet para razonar
+      // mejor sobre tool_results. La invalidación del prefix cache es one-time.
+      if (state.model === HAIKU_MODEL) state.model = SONNET_MODEL;
+
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const tu of completedToolUses) {
         const { result, isError } = await executeTool(tu.name, tu.input, ctx);
@@ -204,12 +232,15 @@ async function runAgenticLoop(
           is_error: isError,
         });
       }
-      state.messages.push({ role: 'user', content: toolResults });
+      const toolMsg: Anthropic.MessageParam = { role: 'user', content: toolResults };
+      state.messages.push(toolMsg);
+      db.appendChatMessage('user', JSON.stringify(toolResults));
       continue;
     }
 
     socket.emit('chat_done', {
       stop_reason: finalMessage.stop_reason ?? null,
+      model: state.model,
       usage: {
         input_tokens: finalMessage.usage.input_tokens,
         output_tokens: finalMessage.usage.output_tokens,
@@ -219,4 +250,92 @@ async function runAgenticLoop(
     });
     return;
   }
+}
+
+let itemCounter = 0;
+function nextItemId(prefix: string): string {
+  itemCounter += 1;
+  return `${prefix}_${Date.now()}_${itemCounter}`;
+}
+
+/**
+ * Reconstruye ChatItems a partir del array de Anthropic.MessageParam persistido.
+ * Se usa al reconectar para repintar el chat con el historial existente.
+ */
+function convertToItems(messages: Anthropic.MessageParam[]): ChatItem[] {
+  const items: ChatItem[] = [];
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      if (typeof msg.content === 'string') {
+        items.push({ kind: 'user', id: nextItemId('user'), text: msg.content });
+        continue;
+      }
+      if (!Array.isArray(msg.content)) continue;
+      for (const block of msg.content) {
+        if (block.type === 'tool_result') {
+          // Encontrar el tool_use item con ese id y setear su result.
+          const target = items.find(
+            (it) => it.kind === 'tool_use' && it.id === block.tool_use_id,
+          );
+          if (target && target.kind === 'tool_use') {
+            const raw =
+              typeof block.content === 'string'
+                ? block.content
+                : JSON.stringify(block.content);
+            let parsed: unknown = raw;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              // dejar como string raw
+            }
+            target.result = {
+              id: block.tool_use_id,
+              result: parsed,
+              is_error: block.is_error ?? false,
+            };
+            target.streaming = false;
+          }
+        } else if (block.type === 'text') {
+          items.push({ kind: 'user', id: nextItemId('user'), text: block.text });
+        }
+      }
+    } else if (msg.role === 'assistant') {
+      if (typeof msg.content === 'string') {
+        items.push({
+          kind: 'assistant_text',
+          id: nextItemId('asst'),
+          text: msg.content,
+          streaming: false,
+        });
+        continue;
+      }
+      if (!Array.isArray(msg.content)) continue;
+      for (const block of msg.content) {
+        if (block.type === 'text') {
+          items.push({
+            kind: 'assistant_text',
+            id: nextItemId('asst'),
+            text: block.text,
+            streaming: false,
+          });
+        } else if (block.type === 'thinking') {
+          items.push({
+            kind: 'thinking',
+            id: nextItemId('thinking'),
+            text: block.thinking,
+            streaming: false,
+          });
+        } else if (block.type === 'tool_use') {
+          items.push({
+            kind: 'tool_use',
+            id: block.id,
+            name: block.name,
+            input: block.input,
+            streaming: false,
+          });
+        }
+      }
+    }
+  }
+  return items;
 }
