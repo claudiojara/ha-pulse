@@ -192,12 +192,127 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 
 ---
 
-## Fase 6 — Pulido y deploy
+## Fase 6 — Deploy como add-on de Home Assistant OS
 
-1. Tests E2E completos de los flujos principales.
-2. Performance: virtualización de listas si tenés >200 entidades (`@tanstack/react-virtual`).
-3. Build + Docker compose para deploy local.
-4. README de producción con troubleshooting.
+**Objetivo:** publicar el dashboard como add-on instalable desde Home Assistant Supervisor. Cualquier usuario con HAOS / HA Supervised debería poder agregar el repositorio del catálogo en su HA via "Add custom repository" e instalarlo en dos clicks, sin tocar tokens, sin networking custom, sin reverse proxy.
+
+### Decisiones arquitectónicas (tomadas antes de codear)
+
+- **Dos repos separados**:
+  - `dashboard-web` (este) — código + imagen Docker publicada a `ghcr.io/<user>/dashboard-web:<version>`.
+  - `dashboard-web-addon` (nuevo) — catálogo público con `repository.yaml` + `dashboard-web/config.yaml` que apunta por versión a la imagen de ghcr.io. Es lo que el usuario agrega en HA Supervisor.
+- **Mismo proceso, mismo puerto**: el backend Fastify sirve el frontend buildeado (`@fastify/static` + SPA fallback). Razón: ingress de HA expone UN solo puerto del add-on. En `pnpm dev` Vite sigue corriendo aparte con HMR.
+- **Multi-arch desde día 1**: `amd64` (HAOS en Proxmox actual) + `aarch64` (futuro Raspberry Pi 4/5). `docker buildx` en GitHub Actions. Si después se quiere Pi Zero 2, se agrega `armv7`.
+- **Modo dual en backend**: si existe `SUPERVISOR_TOKEN` en env → modo *supervised* → cliente HA hacia `http://supervisor/core` con ese token. Si no → modo *standalone* → lee `HA_URL`/`HA_TOKEN` como hoy. Esto mantiene `pnpm dev` y `docker compose` funcionales.
+- **Imagen base**: `node:22-bookworm-slim` (glibc). NO alpine — `better-sqlite3` con musl da problemas de prebuilt.
+
+### Sub-fases
+
+#### 6.a — Backend sirve frontend + Dockerfile standalone
+
+1. Agregar `@fastify/static` a `apps/api`. Servir el build del frontend en `/` con SPA fallback (devolver `index.html` para rutas que no son `/api/*` ni assets).
+2. Nueva variable `WEB_DIST_PATH` en `config.ts` (default `../web/dist` resuelto desde el cwd del proceso). En el contenedor se override a path absoluto.
+3. `Dockerfile` raíz multi-stage:
+   - `deps` — instala dependencies con `pnpm install --frozen-lockfile`.
+   - `build-web` — buildea frontend (`pnpm --filter @dashboard-web/web build`).
+   - `build-api` — buildea backend (`pnpm --filter @dashboard-web/api build`).
+   - `runner` — `node:22-bookworm-slim`, copia builds + `node_modules` (solo prod), expone `:3001`, `CMD` = `node apps/api/dist/server.js`.
+4. `.dockerignore` raíz: excluir `node_modules`, `.git`, `*.md`, `tests/`, etc.
+5. `docker-compose.yml` raíz: servicio único, env vars, volume `./data:/app/data`, `ports: 3001:3001`.
+
+**Verificar:** `docker compose up`, abrir `http://localhost:3001`, ver dashboard, togglear una luz, ver eventos en logs.
+
+#### 6.b — Modo dual: standalone + supervised
+
+1. En `apps/api/src/config.ts`: si `SUPERVISOR_TOKEN` está definido → `ha.url = 'http://supervisor/core'`, `ha.token = SUPERVISOR_TOKEN`. Si no → `HA_URL` y `HA_TOKEN` requeridas como hoy.
+2. Log de arranque distingue modo: `[config] modo supervised` vs `[config] modo standalone`.
+3. Test unit del switch.
+4. Verificar que `pnpm dev` sigue funcionando exactamente igual en modo standalone con `.env`.
+
+**Verificar:** levantar el contenedor con `SUPERVISOR_TOKEN=dummy` seteado, ver el log de modo supervised. Sin el token, modo standalone.
+
+#### 6.c — Crear repo del catálogo + instalación local
+
+1. Crear repo `dashboard-web-addon` en GitHub (vacío al inicio).
+2. Estructura inicial:
+   ```
+   dashboard-web-addon/
+   ├── repository.yaml            # name, url, maintainer del catálogo
+   ├── README.md                  # qué es, cómo agregar a HA
+   └── dashboard-web/             # slug del add-on
+       ├── config.yaml            # version, options, ports, image: ghcr.io/...
+       ├── Dockerfile             # FROM ghcr.io/<user>/dashboard-web:<version>
+       ├── icon.png               # 256x256
+       ├── logo.png               # 250x100
+       └── README.md              # docs del add-on
+   ```
+3. Versión inicial `0.1.0`. Como la imagen de ghcr.io aún no se publicó (eso es 6.f), durante 6.c-6.e usamos el modo "build local" del Supervisor: el `Dockerfile` del add-on hace `COPY` desde el contexto local en vez de `FROM ghcr.io/...`.
+4. **Instalación local** en el HAOS de Proxmox:
+   - Acceder a la VM via Samba (HAOS expone `\\homeassistant.local\addons` con el add-on `Samba share` instalado).
+   - Copiar la carpeta `dashboard-web/` del repo del catálogo a `/addons/dashboard-web/` del HAOS.
+   - En la UI de HA: Settings → Add-ons → ⋮ → Check for updates → debería aparecer en "Local add-ons".
+   - Instalar, arrancar, ver logs.
+
+**Verificar:** add-on aparece en "Local add-ons", instala, arranca. Logs muestran "[HA] conectado" via Supervisor. Puerto del add-on responde HTTP.
+
+#### 6.d — Ingress
+
+1. En `config.yaml` del add-on: `ingress: true`, `ingress_port: 3001`, `panel_icon: mdi:view-dashboard`, `panel_title: Dashboard`.
+2. Frontend: convertir paths absolutos (`/api/...`, sockets) a paths relativos al document base. Si HA inyecta `X-Ingress-Path`, leerlo en una request inicial.
+3. Backend: respetar `X-Ingress-Path` para construir URLs si las hay (ideal: frontend usa solo paths relativos y no hace falta).
+4. Asegurar que CORS no bloquea — en modo supervised, el frontend se sirve desde el mismo origen ingress.
+
+**Verificar:** click en el sidebar de HA → dashboard se carga adentro de HA en un iframe, sin pedir token, sin CORS rotos. Toggle de luces sigue funcionando. Socket.IO conecta.
+
+#### 6.e — Opciones del add-on + persistencia /data
+
+1. Mover el SQLite default a `/data/prefs.db` cuando hay `SUPERVISOR_TOKEN` (en modo standalone sigue siendo `./data/prefs.db`).
+2. Agregar bloque `options` y `schema` al `config.yaml` del add-on con campos:
+   - `anthropic_api_key` (password)
+   - `anthropic_model` (str con `match` para validar slug)
+   - `log_level` (list: debug | info | warn | error)
+3. Backend lee `/data/options.json` (Supervisor lo escribe al arrancar) y lo mergea con el resto de config — env vars siguen como override para dev.
+4. Cambios de opciones requieren restart del add-on (estándar HA).
+
+**Verificar:** cambiar `log_level` en la UI del add-on → restart → ver logs en el nuevo nivel. Persistencia SQLite vive en `/data/prefs.db`. Snapshot de HA incluye el SQLite.
+
+#### 6.f — Publicación pública: CI multi-arch + sync de versiones
+
+1. GitHub Actions en `dashboard-web`:
+   - Trigger: tag `v*` (ej. `v0.1.0`).
+   - Login a `ghcr.io` con `GITHUB_TOKEN`.
+   - `docker buildx` multi-arch (amd64 + aarch64).
+   - Push a `ghcr.io/<user>/dashboard-web:<tag>` + `:latest`.
+   - Hacer pública la imagen (default es privada en `ghcr.io`).
+2. En `dashboard-web-addon`: cambiar el `Dockerfile` del add-on a `FROM ghcr.io/<user>/dashboard-web:<version>`. Bumpear `version:` del `config.yaml` cuando hay nueva imagen — opciones:
+   - PR manual (más simple).
+   - Workflow con `repository_dispatch` desde el repo de código.
+3. README del catálogo con instrucciones para el end-user:
+   - Settings → Add-ons → Store → ⋮ → Repositories → pegar URL del catálogo → Add.
+   - Buscar "Dashboard", instalar, configurar opciones, arrancar.
+
+**Verificar:** desde un HAOS limpio (otra VM o reset del actual), agregar la URL del catálogo, instalar el add-on, configurarlo, ver que funciona end-to-end como si fueras un usuario nuevo.
+
+### Criterios de "done" de Fase 6
+
+- [ ] `docker compose up` corre el dashboard standalone en cualquier máquina con Docker.
+- [ ] Modo dual funciona: standalone con `.env` y supervised con `SUPERVISOR_TOKEN`.
+- [ ] Add-on aparece en HA, instala, arranca, conecta a HA via Supervisor (sin token manual).
+- [ ] Ingress funciona: dashboard se abre desde el sidebar de HA sin auth extra.
+- [ ] Opciones del add-on se reflejan en runtime (al menos modelo de Claude y log level).
+- [ ] Imagen multi-arch (amd64 + aarch64) publicada en `ghcr.io` con tags por versión y `:latest`.
+- [ ] Repo `dashboard-web-addon` instalable via "Add custom repository" en cualquier HAOS.
+- [ ] README de instalación end-user en el repo del catálogo.
+
+---
+
+## Fase 7 — Polish (post-deploy)
+
+Difiriéndose hasta tener Fase 6 cerrada:
+
+1. Tests E2E completos de los flujos principales con Playwright.
+2. Performance: virtualización de listas si hay >200 entidades (`@tanstack/react-virtual`).
+3. README de producción con troubleshooting (modo standalone con docker compose + modo add-on).
 
 ---
 
