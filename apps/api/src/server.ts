@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     credentials: true,
   });
 
+  fastify.log.info(`[config] modo ${config.ha.mode} — HA en ${config.ha.url}`);
   fastify.log.info(`Conectando a Home Assistant en ${config.ha.url}...`);
   const ha: HaClient = await createHaClient({
     url: config.ha.url,

@@ -27,12 +27,6 @@ function loadDotenv(): void {
 
 loadDotenv();
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Variable de entorno requerida: ${name}`);
-  return value;
-}
-
 function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
@@ -44,11 +38,52 @@ function optionalInt(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export type HaMode = 'standalone' | 'supervised';
+
+export interface HaConfig {
+  url: string;
+  token: string;
+  mode: HaMode;
+}
+
+/**
+ * Resuelve la conexión a Home Assistant en uno de dos modos:
+ *
+ * - **supervised**: corremos como add-on de HA OS / Supervised. El Supervisor
+ *   inyecta `SUPERVISOR_TOKEN` con scope a la API de HA. La URL es interna
+ *   (`http://supervisor/core`) y NO requiere `HA_URL`/`HA_TOKEN`.
+ * - **standalone**: corremos en una Mac, mini-server, docker compose, etc.
+ *   Requiere `HA_URL` y `HA_TOKEN` (long-lived access token) en env.
+ *
+ * Si `SUPERVISOR_TOKEN` existe, gana — los HA_* del env se ignoran. Esto evita
+ * configuraciones híbridas confusas adentro del add-on.
+ */
+export function resolveHaConfig(env: NodeJS.ProcessEnv): HaConfig {
+  const supervisorToken = env.SUPERVISOR_TOKEN;
+  if (supervisorToken) {
+    return {
+      url: 'http://supervisor/core',
+      token: supervisorToken,
+      mode: 'supervised',
+    };
+  }
+  const url = env.HA_URL;
+  const token = env.HA_TOKEN;
+  if (!url) {
+    throw new Error(
+      'Variable de entorno requerida: HA_URL (o SUPERVISOR_TOKEN para modo supervised)',
+    );
+  }
+  if (!token) {
+    throw new Error(
+      'Variable de entorno requerida: HA_TOKEN (o SUPERVISOR_TOKEN para modo supervised)',
+    );
+  }
+  return { url, token, mode: 'standalone' };
+}
+
 export const config = {
-  ha: {
-    url: required('HA_URL'),
-    token: required('HA_TOKEN'),
-  },
+  ha: resolveHaConfig(process.env),
   server: {
     port: optionalInt('PORT', 3001),
     host: optional('HOST', '0.0.0.0'),
