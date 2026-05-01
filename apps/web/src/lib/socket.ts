@@ -9,22 +9,42 @@ import type {
 } from '@dashboard-web/shared';
 import { type Socket, io } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+/**
+ * Dev: VITE_API_URL apunta al backend en otro origen (ej. http://localhost:3001).
+ * Prod: undefined → mismo origen que el documento. El path de Socket.IO se
+ * deriva de `window.location.pathname` para respetar el prefijo de Ingress
+ * (`/api/hassio_ingress/<token>/`) si lo hay; en standalone (Docker compose,
+ * file:// no existe) el directorio es simplemente `/`.
+ */
+const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 let socketInstance: AppSocket | null = null;
 
-/**
- * Devuelve el socket compartido. Lazy init: la conexión se abre al primer uso,
- * no al importar el módulo (a diferencia de HAWeb donde se conectaba en el import).
- */
+function documentBaseDir(): string {
+  // Path del directorio del documento, con trailing slash. Ejemplos:
+  //   '/'                                    → '/'
+  //   '/api/hassio_ingress/abc123/'          → '/api/hassio_ingress/abc123/'
+  //   '/api/hassio_ingress/abc123/index.html' → '/api/hassio_ingress/abc123/'
+  return window.location.pathname.replace(/[^/]*$/, '');
+}
+
 export function getSocket(): AppSocket {
   if (!socketInstance) {
-    socketInstance = io(API_URL, {
-      autoConnect: true,
-      transports: ['websocket', 'polling'],
-    });
+    if (API_URL) {
+      socketInstance = io(API_URL, {
+        autoConnect: true,
+        transports: ['websocket', 'polling'],
+      });
+    } else {
+      const dir = documentBaseDir();
+      socketInstance = io({
+        autoConnect: true,
+        transports: ['websocket', 'polling'],
+        path: `${dir}socket.io/`,
+      });
+    }
   }
   return socketInstance;
 }
