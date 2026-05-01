@@ -1,38 +1,62 @@
 name: Release
 
-# Builds a multi-arch Docker image (linux/amd64 + linux/arm64) and pushes it
-# to ghcr.io on every annotated tag matching `v*`. The HA add-on catalog repo
-# (claudiojara/ha-pulse-addon) consumes those images via the `image:` field
-# in its `config.yaml`. See RELEASING.md for the full release workflow.
+# Two-stage release pipeline driven by Conventional Commits and release-please:
+#
+# 1. release-please runs on every push to `main`. It maintains an open PR
+#    titled "chore(main): release X.Y.Z" that accumulates the version bump
+#    + CHANGELOG entries from the commits since the last release. Merging
+#    that PR creates a tag (vX.Y.Z) and a GitHub Release.
+#
+# 2. When release-please reports `release_created`, the build-and-push job
+#    fires in the same workflow run. It builds the multi-arch image
+#    (linux/amd64 + linux/arm64) and pushes it to
+#    ghcr.io/{owner}/ha-pulse:{version} and :latest.
+#
+# The two-jobs-in-one-workflow pattern avoids a known GitHub gotcha: tags
+# pushed by GITHUB_TOKEN do NOT trigger separate workflows. Combining lets
+# us drive everything from the default token without needing a PAT.
+#
+# See ha-dashboard/RELEASING.md for the full release workflow and
+# CONTRIBUTING.md for the commit conventions release-please relies on.
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   packages: write
 
 jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name:        ${{ steps.release.outputs.tag_name }}
+      version:         ${{ steps.release.outputs.version }}
+    steps:
+      - name: release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   build-and-push:
     runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: Validate semver tag
-        run: |
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match vMAJOR.MINOR.PATCH"
-            exit 1
-          fi
-
-      - name: Extract version from tag
+      - name: Compute image name
         id: meta
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           echo "image=ghcr.io/${OWNER_LC}/ha-pulse" >> "$GITHUB_OUTPUT"
 
@@ -57,11 +81,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:${{ needs.release-please.outputs.version }}
             ${{ steps.meta.outputs.image }}:latest
           # Build args mirror what the add-on Dockerfile expects. VITE_API_URL
           # stays empty so the frontend uses relative paths (works under both
-          # standalone Docker and HA Ingress — see LESSONS.md §13).
+          # standalone Docker and HA Ingress — see ha-dashboard/LESSONS.md §13).
           build-args: |
             VITE_API_URL=
           cache-from: type=gha

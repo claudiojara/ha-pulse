@@ -1,0 +1,32 @@
+---
+name: Pulse
+version: "0.4.3" # x-release-please-version
+slug: pulse
+description: >-
+  Custom Home Assistant dashboard — chat with Claude, real-time entity control,
+  per-room views, camera streams and media player controls.
+url: https://github.com/claudiojara/ha-pulse-addon
+# Prebuilt multi-arch image published by the ha-pulse repo CI on tag
+# push. Supervisor pulls this directly when an end user installs the add-on
+# from the catalog. For local development via deploy-local.sh, this line is
+# stripped on the HAOS side so Supervisor builds from the synced source tree.
+image: ghcr.io/claudiojara/ha-pulse
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+boot: auto
+homeassistant_api: true
+ingress: true
+ingress_port: 3001
+panel_icon: mdi:pulse
+panel_title: Pulse
+options:
+  log_level: info
+  anthropic_api_key: ""
+  anthropic_model: claude-sonnet-4-6
+schema:
+  log_level: list(debug|info|warn|error)
+  anthropic_api_key: password
+  anthropic_model: match(^claude-[a-z0-9-]+$)
