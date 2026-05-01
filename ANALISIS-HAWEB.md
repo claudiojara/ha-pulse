@@ -1,6 +1,6 @@
 # Análisis profundo — Proyecto HAWeb
 
-> Documento de partida para construir desde cero `dashboard-web` tomando como referencia
+> Documento de partida para construir desde cero `ha-pulse` tomando como referencia
 > `/Users/claudiojara/dev/homeassistant/HAWeb`. Generado con exploración profunda
 > (Opus 4.7, 1M context) sobre frontend, backend, integración con Home Assistant, agente
 > conversacional, datos, tests, y patrones de desarrollo.
@@ -469,7 +469,7 @@ la pena replicar tal cual:
 
 ---
 
-## 8. Recomendaciones para `dashboard-web` (proyecto nuevo)
+## 8. Recomendaciones para `ha-pulse` (proyecto nuevo)
 
 ### Stack propuesto
 
@@ -502,7 +502,7 @@ la pena replicar tal cual:
 ### Estructura propuesta
 
 ```
-dashboard-web/
+ha-pulse/
 ├── apps/
 │   ├── frontend/   # Astro + Svelte + TS
 │   └── backend/    # Node ESM + Fastify
@@ -600,7 +600,7 @@ WS, token server-side, MCP en dev). El problema no es la arquitectura — es la 
 falta tipado, faltan tests, falta una sola convención visual, el chat no tiene caching, los
 listeners no se limpian.
 
-Para `dashboard-web` la jugada es:
+Para `ha-pulse` la jugada es:
 
 - **Arquitectura: igual.** Funciona y es la canónica.
 - **Implementación: empezar de cero** con TypeScript, Biome, Vitest+Playwright, una sola

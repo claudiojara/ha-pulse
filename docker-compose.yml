@@ -6,8 +6,8 @@ services:
       args:
         # Empty -> frontend uses relative URLs (same origin as API).
         VITE_API_URL: ""
-    image: dashboard-web:dev
-    container_name: dashboard-web
+    image: ha-pulse:dev
+    container_name: ha-pulse
     init: true
     ports:
       - "3001:3001"

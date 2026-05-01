@@ -1,4 +1,4 @@
-# Roadmap — dashboard-web
+# Roadmap — ha-pulse
 
 > Plan de fases para construir el dashboard. Cada fase es un commit (o varios), pequeña, verificable end-to-end. **No avanzar a la siguiente fase sin antes verificar la actual contra HA real.**
 
@@ -21,7 +21,7 @@ Verificación: backend respondió `/api/health` con `"ha":"connected"`, frontend
 ## Cómo retomar (cold start)
 
 ```bash
-cd /Users/claudiojara/Workspace/personal/home-assistant/dashboard-web
+cd /Users/claudiojara/Workspace/personal/home-assistant/ha-pulse
 
 # 1. Cargar tokens desde Keychain (HA_URL, HA_TOKEN, ANTHROPIC_API_KEY)
 source ~/scripts/ha-dev.sh
@@ -199,8 +199,8 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 ### Decisiones arquitectónicas (tomadas antes de codear)
 
 - **Dos repos separados**:
-  - `dashboard-web` (este) — código + imagen Docker publicada a `ghcr.io/<user>/dashboard-web:<version>`.
-  - `dashboard-web-addon` (nuevo) — catálogo público con `repository.yaml` + `dashboard-web/config.yaml` que apunta por versión a la imagen de ghcr.io. Es lo que el usuario agrega en HA Supervisor.
+  - `ha-pulse` (este) — código + imagen Docker publicada a `ghcr.io/<user>/ha-pulse:<version>`.
+  - `ha-pulse-addon` (nuevo) — catálogo público con `repository.yaml` + `ha-pulse/config.yaml` que apunta por versión a la imagen de ghcr.io. Es lo que el usuario agrega en HA Supervisor.
 - **Mismo proceso, mismo puerto**: el backend Fastify sirve el frontend buildeado (`@fastify/static` + SPA fallback). Razón: ingress de HA expone UN solo puerto del add-on. En `pnpm dev` Vite sigue corriendo aparte con HMR.
 - **Multi-arch desde día 1**: `amd64` (HAOS en Proxmox actual) + `aarch64` (futuro Raspberry Pi 4/5). `docker buildx` en GitHub Actions. Si después se quiere Pi Zero 2, se agrega `armv7`.
 - **Modo dual en backend**: si existe `SUPERVISOR_TOKEN` en env → modo *supervised* → cliente HA hacia `http://supervisor/core` con ese token. Si no → modo *standalone* → lee `HA_URL`/`HA_TOKEN` como hoy. Esto mantiene `pnpm dev` y `docker compose` funcionales.
@@ -233,15 +233,15 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 
 #### 6.c — Crear repo del catálogo + instalación local
 
-1. Crear repo `dashboard-web-addon` en GitHub (vacío al inicio).
+1. Crear repo `ha-pulse-addon` en GitHub (vacío al inicio).
 2. Estructura inicial:
    ```
-   dashboard-web-addon/
+   ha-pulse-addon/
    ├── repository.yaml            # name, url, maintainer del catálogo
    ├── README.md                  # qué es, cómo agregar a HA
-   └── dashboard-web/             # slug del add-on
+   └── ha-pulse/             # slug del add-on
        ├── config.yaml            # version, options, ports, image: ghcr.io/...
-       ├── Dockerfile             # FROM ghcr.io/<user>/dashboard-web:<version>
+       ├── Dockerfile             # FROM ghcr.io/<user>/ha-pulse:<version>
        ├── icon.png               # 256x256
        ├── logo.png               # 250x100
        └── README.md              # docs del add-on
@@ -249,7 +249,7 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 3. Versión inicial `0.1.0`. Como la imagen de ghcr.io aún no se publicó (eso es 6.f), durante 6.c-6.e usamos el modo "build local" del Supervisor: el `Dockerfile` del add-on hace `COPY` desde el contexto local en vez de `FROM ghcr.io/...`.
 4. **Instalación local** en el HAOS de Proxmox:
    - Acceder a la VM via Samba (HAOS expone `\\homeassistant.local\addons` con el add-on `Samba share` instalado).
-   - Copiar la carpeta `dashboard-web/` del repo del catálogo a `/addons/dashboard-web/` del HAOS.
+   - Copiar la carpeta `ha-pulse/` del repo del catálogo a `/addons/ha-pulse/` del HAOS.
    - En la UI de HA: Settings → Add-ons → ⋮ → Check for updates → debería aparecer en "Local add-ons".
    - Instalar, arrancar, ver logs.
 
@@ -278,13 +278,13 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 
 #### 6.f — Publicación pública: CI multi-arch + sync de versiones
 
-1. GitHub Actions en `dashboard-web`:
+1. GitHub Actions en `ha-pulse`:
    - Trigger: tag `v*` (ej. `v0.1.0`).
    - Login a `ghcr.io` con `GITHUB_TOKEN`.
    - `docker buildx` multi-arch (amd64 + aarch64).
-   - Push a `ghcr.io/<user>/dashboard-web:<tag>` + `:latest`.
+   - Push a `ghcr.io/<user>/ha-pulse:<tag>` + `:latest`.
    - Hacer pública la imagen (default es privada en `ghcr.io`).
-2. En `dashboard-web-addon`: cambiar el `Dockerfile` del add-on a `FROM ghcr.io/<user>/dashboard-web:<version>`. Bumpear `version:` del `config.yaml` cuando hay nueva imagen — opciones:
+2. En `ha-pulse-addon`: cambiar el `Dockerfile` del add-on a `FROM ghcr.io/<user>/ha-pulse:<version>`. Bumpear `version:` del `config.yaml` cuando hay nueva imagen — opciones:
    - PR manual (más simple).
    - Workflow con `repository_dispatch` desde el repo de código.
 3. README del catálogo con instrucciones para el end-user:
@@ -301,7 +301,7 @@ Decisión: arrancar con A (tools custom mínimas) para no meter Python ahora. Mi
 - [ ] Ingress funciona: dashboard se abre desde el sidebar de HA sin auth extra.
 - [ ] Opciones del add-on se reflejan en runtime (al menos modelo de Claude y log level).
 - [ ] Imagen multi-arch (amd64 + aarch64) publicada en `ghcr.io` con tags por versión y `:latest`.
-- [ ] Repo `dashboard-web-addon` instalable via "Add custom repository" en cualquier HAOS.
+- [ ] Repo `ha-pulse-addon` instalable via "Add custom repository" en cualquier HAOS.
 - [ ] README de instalación end-user en el repo del catálogo.
 
 ---
@@ -338,7 +338,7 @@ Difiriéndose hasta tener Fase 6 cerrada:
 Cuando abrás Claude en este directorio:
 
 1. Decile **"leé `ROADMAP.md` y arranquemos Fase 1"** (o la que toque).
-2. Si querés recuperar contexto histórico: `mem_search "dashboard-web"` (la memoria está saved con topic_key `dashboard-web/phase-0`).
+2. Si querés recuperar contexto histórico: `mem_search "ha-pulse"` (la memoria está saved con topic_key `ha-pulse/phase-0`).
 3. Para verificar que retomás bien, corré `pnpm dev` y abrí `localhost:5173` antes de tocar código nuevo.
 
 **Regla de oro:** cada fase termina con commit + verificación contra HA real. No avancés con cosas rotas.

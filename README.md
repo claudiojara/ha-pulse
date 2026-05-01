@@ -1,4 +1,4 @@
-# dashboard-web
+# ha-pulse
 
 Dashboard web reactivo para Home Assistant. SPA en React + Vite con backend Fastify, conectados por Socket.IO. Chat con Claude API integrado.
 
@@ -71,7 +71,7 @@ pnpm dev
 ## Estructura
 
 ```
-dashboard-web/
+ha-pulse/
 ├── apps/
 │   ├── api/          # Fastify + Socket.IO + HA client
 │   └── web/          # React + Vite + shadcn
