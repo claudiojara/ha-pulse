@@ -49,3 +49,4 @@ apps/web/src/routeTree.gen.ts
 
 # sqlite local de preferencias
 apps/api/data/
+
