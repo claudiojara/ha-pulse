@@ -1,4 +1,4 @@
-import { type HassEntity, isOn } from '@dashboard-web/shared';
+import { isOn } from '@dashboard-web/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';

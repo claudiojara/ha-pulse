@@ -1,0 +1,28 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Empty -> frontend uses relative URLs (same origin as API).
+        VITE_API_URL: ""
+    image: dashboard-web:dev
+    container_name: dashboard-web
+    init: true
+    ports:
+      - "3001:3001"
+    environment:
+      # Required: HA connection. Source these from your shell before `docker compose up`
+      # (e.g. `source ~/scripts/ha-dev.sh`) — they fall back to empty if unset, which
+      # makes the API fail at startup with a clear error.
+      HA_URL: ${HA_URL}
+      HA_TOKEN: ${HA_TOKEN}
+      # Optional: chat with Claude. If empty, chat is disabled but the dashboard works.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      # Server config — pinned for the docker scenario (same-origin frontend).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ALLOWED_ORIGINS: http://localhost:3001
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

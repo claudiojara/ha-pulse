@@ -91,6 +91,17 @@ export const config = {
     /** Path al SQLite de preferencias. Relativo al cwd del proceso (apps/api). */
     path: optional('PREFS_DB_PATH', './data/prefs.db'),
   },
+  web: {
+    /**
+     * Path al `dist/` del frontend buildeado. Si existe, el API lo sirve como
+     * statics + SPA fallback en `/`. Si no existe, modo API-only (dev: Vite
+     * corre aparte en :5173).
+     *
+     * Default `'../web/dist'` resuelto desde el cwd del proceso (apps/api).
+     * En el contenedor se override a path absoluto (ej. `/app/apps/web/dist`).
+     */
+    distPath: optional('WEB_DIST_PATH', '../web/dist'),
+  },
   anthropic: {
     /** API key para chat con Claude (Fase 4). Vacío = chat deshabilitado. */
     apiKey: optional('ANTHROPIC_API_KEY', ''),

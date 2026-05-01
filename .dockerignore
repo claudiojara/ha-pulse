@@ -1,0 +1,28 @@
+**/node_modules
+.git
+.gitignore
+.gitattributes
+.editorconfig
+.vscode
+.idea
+.DS_Store
+
+# Build artifacts (regenerated inside the image)
+**/dist
+**/.tanstack
+
+# Local env / secrets — explicitly excluded
+.env
+.env.*
+!.env.example
+
+# Tests / docs (not needed at runtime)
+tests
+playwright-report
+test-results
+playwright.config.ts
+*.md
+!README.md
+
+# Local data (mounted as volume in compose)
+data

@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { Server as SocketIOServer } from 'socket.io';
 import type {
@@ -70,6 +73,26 @@ async function main(): Promise<void> {
     fastify.log.info('[chat] habilitado (auto-switch haiku/sonnet 4.5/4.6)');
   } else {
     fastify.log.warn('[chat] deshabilitado: ANTHROPIC_API_KEY no seteada');
+  }
+
+  // Servir frontend buildeado si existe (prod / docker / HA add-on).
+  // En dev (pnpm dev) la dist no existe — Vite corre aparte en :5173.
+  const webDistPath = resolve(process.cwd(), config.web.distPath);
+  if (existsSync(webDistPath)) {
+    await fastify.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: '/',
+      wildcard: false,
+    });
+    fastify.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api/') || req.url.startsWith('/socket.io/')) {
+        return reply.code(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+    fastify.log.info(`[web] sirviendo statics desde ${webDistPath}`);
+  } else {
+    fastify.log.info(`[web] sin frontend buildeado en ${webDistPath} — modo API-only`);
   }
 
   // Levantamos primero Fastify para tener el server HTTP listo, después montamos Socket.IO encima.
