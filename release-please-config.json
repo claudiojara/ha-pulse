@@ -6,6 +6,7 @@
   "packages": {
     ".": {
       "package-name": "ha-pulse",
+      "changelog-path": "pulse/CHANGELOG.md",
       "extra-files": [
         {
           "type": "generic",
