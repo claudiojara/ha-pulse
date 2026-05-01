@@ -2,7 +2,7 @@ name: Release
 
 # Builds a multi-arch Docker image (linux/amd64 + linux/arm64) and pushes it
 # to ghcr.io on every annotated tag matching `v*`. The HA add-on catalog repo
-# (neocjara/dashboard-web-addon) consumes those images via the `image:` field
+# (claudiojara/ha-pulse-addon) consumes those images via the `image:` field
 # in its `config.yaml`. See RELEASING.md for the full release workflow.
 
 on:
@@ -34,7 +34,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           OWNER_LC="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-          echo "image=ghcr.io/${OWNER_LC}/dashboard-web" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${OWNER_LC}/ha-pulse" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
