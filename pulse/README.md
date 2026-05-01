@@ -42,6 +42,6 @@ habitación, overrides de nombre/icono) en `/data/prefs.db`, que el
 Supervisor incluye automáticamente en los snapshots de HA. Restaurar un
 snapshot recupera todas las preferencias.
 
-## Repositorio del catálogo
+## Repositorio
 
-<https://github.com/claudiojara/ha-pulse-addon>
+<https://github.com/claudiojara/ha-pulse>

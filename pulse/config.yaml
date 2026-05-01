@@ -5,7 +5,7 @@ slug: pulse
 description: >-
   Custom Home Assistant dashboard — chat with Claude, real-time entity control,
   per-room views, camera streams and media player controls.
-url: https://github.com/claudiojara/ha-pulse-addon
+url: https://github.com/claudiojara/ha-pulse
 # Prebuilt multi-arch image published by the ha-pulse repo CI on tag
 # push. Supervisor pulls this directly when an end user installs the add-on
 # from the catalog. For local development via deploy-local.sh, this line is
