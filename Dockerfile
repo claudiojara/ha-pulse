@@ -43,12 +43,13 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/packages/shared/src ./packages/shared/src
 
-# Non-root user; /app/data is the SQLite/persistence mount point.
-RUN useradd -r -u 1001 -g root nodejs \
- && mkdir -p /app/data \
- && chown -R nodejs:root /app/data
+# /app/data es el mountpoint de SQLite en standalone Docker compose. Bajo
+# Supervisor, la DB se mueve a /data (montado por el Supervisor), así que no
+# necesitamos crear un user dedicado: corremos como root como el resto de
+# add-ons de HA (el aislamiento lo provee el Supervisor con capabilities y
+# AppArmor, no el uid del container).
+RUN mkdir -p /app/data
 
-USER nodejs
 WORKDIR /app/apps/api
 
 EXPOSE 3001

@@ -25,6 +25,33 @@ function loadDotenv(): void {
   }
 }
 
+/**
+ * En modo add-on (supervised), HA Supervisor escribe `/data/options.json` con
+ * los valores que el usuario configuró en la UI del add-on (campo `options` del
+ * `config.yaml`). Acá los mapeamos a env vars para que el resto del código las
+ * use con la misma semántica que en dev. Las env vars del shell siguen ganando
+ * — útil para forzar un override en debugging puntual desde SSH al add-on.
+ */
+function loadAddonOptions(): void {
+  try {
+    const content = readFileSync('/data/options.json', 'utf-8');
+    const opts: Record<string, unknown> = JSON.parse(content);
+    const mapping: Record<string, string> = {
+      log_level: 'LOG_LEVEL',
+      anthropic_api_key: 'ANTHROPIC_API_KEY',
+      anthropic_model: 'ANTHROPIC_MODEL',
+    };
+    for (const [optKey, envKey] of Object.entries(mapping)) {
+      const v = opts[optKey];
+      if (v === undefined || v === null || v === '') continue;
+      if (process.env[envKey] === undefined) process.env[envKey] = String(v);
+    }
+  } catch {
+    // /data/options.json no existe → modo standalone (Docker compose / dev)
+  }
+}
+
+loadAddonOptions();
 loadDotenv();
 
 function optional(name: string, fallback: string): string {
@@ -123,8 +150,20 @@ export const config = {
     cameraSnapshotMaxAge: optionalInt('CAMERA_SNAPSHOT_MAX_AGE', 2),
   },
   db: {
-    /** Path al SQLite de preferencias. Relativo al cwd del proceso (apps/api). */
-    path: optional('PREFS_DB_PATH', './data/prefs.db'),
+    /**
+     * Path al SQLite de preferencias.
+     *
+     * - **supervised** (add-on de HA): forzamos `/data/prefs.db`, el directorio
+     *   que el Supervisor monta como persistente y que el sistema de backups
+     *   incluye automáticamente. El env var PREFS_DB_PATH se ignora en este
+     *   modo a propósito — la decisión es de operativa, no del usuario.
+     * - **standalone** (Docker compose o dev): respeta `PREFS_DB_PATH` si está
+     *   seteado (en compose se setea `/app/data/prefs.db`, montado en `./data`).
+     *   Si no, default `./data/prefs.db` relativo al cwd del proceso (apps/api).
+     */
+    path: process.env.SUPERVISOR_TOKEN
+      ? '/data/prefs.db'
+      : optional('PREFS_DB_PATH', './data/prefs.db'),
   },
   web: {
     /**
