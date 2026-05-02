@@ -1,0 +1,39 @@
+/* ─────────────────────────────────────────────
+   Template glass — design tokens
+   Portado de HAWeb (frontend/public/styles/glass-tokens.css)
+   Scoped a `.template-glass` para que no contamine `base`.
+───────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+.template-glass {
+  /* Accent — periwinkle purple */
+  --g-accent: #7c6ff7;
+  --g-accent-soft: #a5a0fb;
+  --g-accent-pale: rgba(124, 111, 247, 0.1);
+  --g-accent-glow: rgba(124, 111, 247, 0.18);
+
+  /* Text */
+  --g-text-1: #1a1b2e;
+  --g-text-2: #6b7480;
+  --g-text-3: #a0a8b8;
+
+  /* Glass surfaces */
+  --g-glass-bg: rgba(255, 255, 255, 0.42);
+  --g-glass-bg-light: rgba(255, 255, 255, 0.28);
+  --g-glass-border: rgba(255, 255, 255, 0.6);
+  --g-glass-shadow:
+    0 8px 32px rgba(40, 60, 160, 0.13),
+    0 2px 8px rgba(0, 0, 0, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --g-glass-blur: blur(20px) saturate(160%);
+
+  /* Shape */
+  --g-radius-card: 20px;
+  --g-radius-sm: 10px;
+
+  /* Tipografía + color base aplicada al contenedor activo */
+  font-family: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  color: var(--g-text-1);
+}

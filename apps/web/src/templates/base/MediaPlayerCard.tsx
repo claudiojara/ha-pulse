@@ -9,131 +9,58 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
-import { entityPictureUrl } from '@/lib/proxy';
-import { callService } from '@/lib/socket';
+import { MEDIA_PLAYER_FEATURES, useMediaPlayer } from '@/hooks/entities';
+import { useThrottle } from '@/hooks/useThrottle';
 import { cn } from '@/lib/utils';
-import { useEntitiesStore, useEntity } from '@/stores/entities';
 
 interface MediaPlayerCardProps {
   entityId: string;
 }
 
-// Bitmask de supported_features (HA media_player constants).
-const FEAT = {
-  PAUSE: 1,
-  SEEK: 2,
-  VOLUME_SET: 4,
-  VOLUME_MUTE: 8,
-  PREVIOUS_TRACK: 16,
-  NEXT_TRACK: 32,
-  TURN_ON: 128,
-  TURN_OFF: 256,
-  PLAY: 16384,
-} as const;
-
 const VOLUME_THROTTLE_MS = 150;
+const FEAT = MEDIA_PLAYER_FEATURES;
 
 export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
-  const entity = useEntity(entityId);
-  const setOptimistic = useEntitiesStore((s) => s.setOptimistic);
-  const clearOptimistic = useEntitiesStore((s) => s.clearOptimistic);
+  const {
+    entity,
+    state,
+    isUnavailable,
+    isOff,
+    isPlaying,
+    muted,
+    has,
+    title,
+    artist,
+    album,
+    artworkUrl,
+    position,
+    duration,
+    hasMedia,
+    togglePlayPause,
+    previousTrack,
+    nextTrack,
+    volumePct,
+    setVolumePct,
+    toggleMute,
+  } = useMediaPlayer(entityId);
 
+  // State UI-only.
   const [draggingPct, setDraggingPct] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const lastSentRef = useRef<number>(0);
 
-  const handleService = useCallback(
-    async (
-      service: string,
-      service_data?: Record<string, unknown>,
-      optimisticState?: string,
-    ): Promise<void> => {
-      if (!entity) return;
-      if (optimisticState) {
-        setOptimistic(entity.entity_id, { state: optimisticState });
-      }
-      const result = await callService({
-        domain: 'media_player',
-        service,
-        target: { entity_id: entity.entity_id },
-        service_data,
-      });
-      if (!result.ok) {
-        clearOptimistic(entity.entity_id);
-        console.error(`[media_player.${service}] falló:`, result.error);
-      }
-    },
-    [entity, setOptimistic, clearOptimistic],
-  );
-
-  const handleVolumeChange = useCallback(
-    (values: number[]): void => {
-      if (!entity || values.length === 0) return;
-      const pct = values[0] ?? 0;
-      setDraggingPct(pct);
-      const now = Date.now();
-      if (now - lastSentRef.current < VOLUME_THROTTLE_MS) return;
-      lastSentRef.current = now;
-      const level = pct / 100;
-      setOptimistic(entity.entity_id, {
-        state: entity.state,
-        attributes: { volume_level: level },
-      });
-      void callService({
-        domain: 'media_player',
-        service: 'volume_set',
-        target: { entity_id: entity.entity_id },
-        service_data: { volume_level: level },
-      });
-    },
-    [entity, setOptimistic],
-  );
-
-  const handleVolumeCommit = useCallback(
-    (values: number[]): void => {
-      if (!entity || values.length === 0) return;
-      const pct = values[0] ?? 0;
-      setDraggingPct(null);
-      const level = pct / 100;
-      setOptimistic(entity.entity_id, {
-        state: entity.state,
-        attributes: { volume_level: level },
-      });
-      void callService({
-        domain: 'media_player',
-        service: 'volume_set',
-        target: { entity_id: entity.entity_id },
-        service_data: { volume_level: level },
-      });
-    },
-    [entity, setOptimistic],
-  );
-
-  const realVolumePct = pctFromLevel(entity?.attributes.volume_level as number | undefined);
+  // Reset dragging si HA confirma cambio externo.
   useEffect(() => {
     setDraggingPct(null);
-  }, [realVolumePct]);
+  }, [volumePct]);
+
+  const setVolumeThrottled = useThrottle(setVolumePct, VOLUME_THROTTLE_MS);
 
   if (!entity) return null;
 
-  const features = (entity.attributes.supported_features as number | undefined) ?? 0;
-  const has = (flag: number): boolean => (features & flag) !== 0;
-  const state = entity.state;
-  const isUnavailable = state === 'unavailable' || state === 'unknown';
-  const isOff = state === 'off' || state === 'standby';
-  const isPlaying = state === 'playing';
-  const muted = entity.attributes.is_volume_muted === true;
-  const title = entity.attributes.media_title as string | undefined;
-  const artist = entity.attributes.media_artist as string | undefined;
-  const album = entity.attributes.media_album_name as string | undefined;
-  const artworkUrl = entityPictureUrl(entity.attributes.entity_picture as string | undefined);
-  const displayPct = draggingPct ?? realVolumePct;
-  const position = entity.attributes.media_position as number | undefined;
-  const duration = entity.attributes.media_duration as number | undefined;
-  const hasMedia = Boolean(title || artist || artworkUrl);
+  const displayPct = draggingPct ?? volumePct;
   const canExpand = hasMedia && !isUnavailable && !isOff;
 
   return (
@@ -243,32 +170,20 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
         {!isUnavailable && !isOff && (
           <div className="flex items-center gap-1">
             {has(FEAT.PREVIOUS_TRACK) && (
-              <IconButton
-                onClick={() => void handleService('media_previous_track')}
-                aria-label="Anterior"
-              >
+              <IconButton onClick={() => void previousTrack()} aria-label="Anterior">
                 <SkipBack className="h-4 w-4" />
               </IconButton>
             )}
             {has(FEAT.PLAY | FEAT.PAUSE) && (
               <IconButton
-                onClick={() =>
-                  void handleService(
-                    isPlaying ? 'media_pause' : 'media_play',
-                    undefined,
-                    isPlaying ? 'paused' : 'playing',
-                  )
-                }
+                onClick={() => void togglePlayPause()}
                 aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </IconButton>
             )}
             {has(FEAT.NEXT_TRACK) && (
-              <IconButton
-                onClick={() => void handleService('media_next_track')}
-                aria-label="Siguiente"
-              >
+              <IconButton onClick={() => void nextTrack()} aria-label="Siguiente">
                 <SkipForward className="h-4 w-4" />
               </IconButton>
             )}
@@ -280,9 +195,7 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
             {has(FEAT.VOLUME_MUTE) && (
               <button
                 type="button"
-                onClick={() =>
-                  void handleService('volume_mute', { is_volume_muted: !muted })
-                }
+                onClick={() => void toggleMute()}
                 className="text-muted-foreground hover:text-foreground"
                 aria-label={muted ? 'Quitar mute' : 'Mute'}
               >
@@ -294,8 +207,16 @@ export function MediaPlayerCard({ entityId }: MediaPlayerCardProps) {
               min={0}
               max={100}
               step={1}
-              onValueChange={handleVolumeChange}
-              onValueCommit={handleVolumeCommit}
+              onValueChange={(values) => {
+                const pct = values[0] ?? 0;
+                setDraggingPct(pct);
+                setVolumeThrottled(pct);
+              }}
+              onValueCommit={(values) => {
+                const pct = values[0] ?? 0;
+                setDraggingPct(null);
+                void setVolumePct(pct);
+              }}
               aria-label="Volumen"
             />
             <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
@@ -325,11 +246,6 @@ function IconButton({ onClick, children, 'aria-label': ariaLabel }: IconButtonPr
       {children}
     </button>
   );
-}
-
-function pctFromLevel(level: number | undefined): number {
-  if (level === undefined || Number.isNaN(level)) return 0;
-  return Math.max(0, Math.min(100, Math.round(level * 100)));
 }
 
 function formatTime(seconds: number): string {

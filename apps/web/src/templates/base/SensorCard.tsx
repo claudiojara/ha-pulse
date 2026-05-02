@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { useSensor } from '@/hooks/entities';
 import { getDeviceClassIcon } from '@/lib/deviceClassIcon';
-import { useEntity } from '@/stores/entities';
 
 interface SensorCardProps {
   entityId: string;
@@ -8,13 +8,10 @@ interface SensorCardProps {
 
 /** Card read-only para domain=sensor: muestra valor + unidad + ícono según device_class. */
 export function SensorCard({ entityId }: SensorCardProps) {
-  const entity = useEntity(entityId);
+  const { entity, value, unit, deviceClass, isUnavailable } = useSensor(entityId);
   if (!entity) return null;
 
-  const deviceClass = entity.attributes.device_class as string | undefined;
   const Icon = getDeviceClassIcon('sensor', deviceClass);
-  const unit = entity.attributes.unit_of_measurement as string | undefined;
-  const isUnavailable = entity.state === 'unavailable' || entity.state === 'unknown';
 
   return (
     <Card>
@@ -30,10 +27,10 @@ export function SensorCard({ entityId }: SensorCardProps) {
         </div>
         <div className="shrink-0 text-right">
           {isUnavailable ? (
-            <span className="text-sm text-muted-foreground">{entity.state}</span>
+            <span className="text-sm text-muted-foreground">{value}</span>
           ) : (
             <span className="font-mono text-sm tabular-nums">
-              {entity.state}
+              {value}
               {unit && <span className="ml-1 text-xs text-muted-foreground">{unit}</span>}
             </span>
           )}

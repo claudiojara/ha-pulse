@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { MessageSquare } from 'lucide-react';
+import { TemplateSwitcher } from '@/components/TemplateSwitcher';
 import { useAreasList } from '@/stores/areas';
 
 export function Sidebar() {
@@ -44,6 +45,7 @@ export function Sidebar() {
             ))}
           </>
         )}
+        <TemplateSwitcher />
       </nav>
     </aside>
   );

@@ -73,10 +73,10 @@ test.describe('navegación entre habitaciones', () => {
     await waitForAreas(page);
 
     const sidebar = page.getByRole('complementary');
+    // Filtrar links de área (excluye Overview + Chat).
     const firstRoom = sidebar
       .getByRole('navigation')
-      .getByRole('link')
-      .filter({ hasNotText: 'Overview' })
+      .locator('a[href^="/room/"]')
       .first();
     const roomName = (await firstRoom.textContent())?.trim() ?? '';
     expect(roomName.length).toBeGreaterThan(0);

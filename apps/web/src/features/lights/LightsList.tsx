@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { LightCard } from '@/features/lights/LightCard';
+import { EntityCard } from '@/features/entities/EntityCard';
 import { useLights } from '@/stores/entities';
 
 interface LightsListProps {
@@ -26,7 +26,7 @@ export function LightsList({ areaId, emptyLabel }: LightsListProps = {}) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {lights.map((light) => (
-        <LightCard key={light.entity_id} entityId={light.entity_id} />
+        <EntityCard key={light.entity_id} entityId={light.entity_id} />
       ))}
     </div>
   );

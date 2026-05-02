@@ -1,46 +1,36 @@
 import { getDomain } from '@dashboard-web/shared';
 import { Card, CardContent } from '@/components/ui/card';
-import { CameraCard } from '@/features/cameras/CameraCard';
-import { ClimateCard } from '@/features/climate/ClimateCard';
-import { LightCard } from '@/features/lights/LightCard';
-import { MediaPlayerCard } from '@/features/media/MediaPlayerCard';
-import { BinarySensorCard } from '@/features/sensors/BinarySensorCard';
-import { SensorCard } from '@/features/sensors/SensorCard';
-import { SwitchCard } from '@/features/switches/SwitchCard';
 import { useEntity } from '@/stores/entities';
+import { useActiveTemplate } from '@/templates/registry';
 
 interface EntityCardProps {
   entityId: string;
 }
 
 /**
- * Despacha al card específico según el dominio de la entidad.
- * Dominios soportados en Fase 2.a: light, switch.
- * El resto cae a un placeholder hasta 2.b/c/d.
+ * Resuelve el componente de card según el template activo + dominio de la
+ * entidad. Si el template no implementa el dominio, cae a `UnsupportedCard`.
+ *
+ * El template activo viene de `user_prefs.active_template_id`. Default `base`.
  */
 export function EntityCard({ entityId }: EntityCardProps) {
   const entity = useEntity(entityId);
+  const template = useActiveTemplate();
   if (!entity) return null;
 
   const domain = getDomain(entity.entity_id);
-  switch (domain) {
-    case 'light':
-      return <LightCard entityId={entityId} />;
-    case 'switch':
-      return <SwitchCard entityId={entityId} />;
-    case 'sensor':
-      return <SensorCard entityId={entityId} />;
-    case 'binary_sensor':
-      return <BinarySensorCard entityId={entityId} />;
-    case 'climate':
-      return <ClimateCard entityId={entityId} />;
-    case 'media_player':
-      return <MediaPlayerCard entityId={entityId} />;
-    case 'camera':
-      return <CameraCard entityId={entityId} />;
-    default:
-      return <UnsupportedCard entityId={entityId} domain={domain} state={entity.state} name={entity.attributes.friendly_name ?? entityId} />;
+  const Component = template.cards[domain];
+  if (!Component) {
+    return (
+      <UnsupportedCard
+        entityId={entityId}
+        domain={domain}
+        state={entity.state}
+        name={entity.attributes.friendly_name ?? entityId}
+      />
+    );
   }
+  return <Component entityId={entityId} />;
 }
 
 interface UnsupportedCardProps {

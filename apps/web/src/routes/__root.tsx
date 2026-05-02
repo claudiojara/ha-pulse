@@ -6,6 +6,8 @@ import { useHaSocket } from '@/hooks/useHaSocket';
 import { useTheme, useThemeSync } from '@/hooks/useTheme';
 import { useEntitiesStore, useLightsOnCount } from '@/stores/entities';
 import { useEditMode, usePreferencesStore } from '@/stores/preferences';
+import { TemplateRoot } from '@/templates/TemplateRoot';
+import { useActiveTemplate } from '@/templates/registry';
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -23,10 +25,13 @@ function RootLayout() {
   const editMode = useEditMode();
   const setEditMode = usePreferencesStore((s) => s.setEditMode);
   const { theme, toggle: toggleTheme } = useTheme();
+  const template = useActiveTemplate();
+  const isGlass = template.id === 'glass';
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
+    <TemplateRoot>
+    <div className={`relative z-[2] min-h-screen text-foreground ${isGlass ? '' : 'bg-background'}`}>
+      <header className={`sticky top-0 z-20 border-b backdrop-blur ${isGlass ? 'bg-white/40 border-white/40' : 'bg-background/80'}`}>
         <div className="flex items-center justify-between px-6 py-4">
           <h1 className="text-lg font-semibold tracking-tight">HA Dashboard</h1>
           <div className="flex items-center gap-4 text-sm">
@@ -89,5 +94,6 @@ function RootLayout() {
         </main>
       </div>
     </div>
+    </TemplateRoot>
   );
 }

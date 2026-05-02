@@ -1,7 +1,6 @@
-import { isOn } from '@dashboard-web/shared';
 import { Card, CardContent } from '@/components/ui/card';
+import { useBinarySensor } from '@/hooks/entities';
 import { binarySensorStateLabel, getDeviceClassIcon } from '@/lib/deviceClassIcon';
-import { useEntity } from '@/stores/entities';
 
 interface BinarySensorCardProps {
   entityId: string;
@@ -9,14 +8,11 @@ interface BinarySensorCardProps {
 
 /** Card read-only para domain=binary_sensor: ícono + label semántico según device_class y estado. */
 export function BinarySensorCard({ entityId }: BinarySensorCardProps) {
-  const entity = useEntity(entityId);
+  const { entity, isOn, deviceClass, isUnavailable } = useBinarySensor(entityId);
   if (!entity) return null;
 
-  const deviceClass = entity.attributes.device_class as string | undefined;
-  const isUnavailable = entity.state === 'unavailable' || entity.state === 'unknown';
-  const on = isOn(entity);
-  const Icon = getDeviceClassIcon('binary_sensor', deviceClass, on);
-  const label = isUnavailable ? entity.state : binarySensorStateLabel(deviceClass, on);
+  const Icon = getDeviceClassIcon('binary_sensor', deviceClass, isOn);
+  const label = isUnavailable ? entity.state : binarySensorStateLabel(deviceClass, isOn);
 
   return (
     <Card>
@@ -25,7 +21,7 @@ export function BinarySensorCard({ entityId }: BinarySensorCardProps) {
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
             isUnavailable
               ? 'bg-muted text-muted-foreground'
-              : on
+              : isOn
                 ? 'bg-primary/15 text-primary'
                 : 'bg-muted text-muted-foreground'
           }`}
@@ -40,7 +36,7 @@ export function BinarySensorCard({ entityId }: BinarySensorCardProps) {
         </div>
         <span
           className={`shrink-0 text-sm ${
-            isUnavailable ? 'text-muted-foreground' : on ? 'font-medium' : 'text-muted-foreground'
+            isUnavailable ? 'text-muted-foreground' : isOn ? 'font-medium' : 'text-muted-foreground'
           }`}
         >
           {label}
