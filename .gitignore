@@ -50,3 +50,7 @@ apps/web/src/routeTree.gen.ts
 # sqlite local de preferencias
 apps/api/data/
 
+# notas privadas locales (no commitear nunca)
+lessons.md
+releasing.md
+
