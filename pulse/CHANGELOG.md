@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/claudiojara/ha-pulse/compare/v0.4.4...v0.5.0) (2026-05-02)
+
+
+### Features
+
+* **templates:** switchable card templates with glass MVP ([b69149d](https://github.com/claudiojara/ha-pulse/commit/b69149ddbc7526e77fed6b863e846210d8758184))
+
 ## [0.4.4](https://github.com/claudiojara/ha-pulse/compare/v0.4.3...v0.4.4) (2026-05-01)
 
 
